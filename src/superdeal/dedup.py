@@ -11,7 +11,6 @@ from dataclasses import dataclass
 
 from .parser import Deal
 
-
 _STOPWORDS = {
     "deal", "offer", "sale", "exclusive", "new", "launch", "live",
     "price", "only", "just", "available", "buy", "get",
@@ -21,6 +20,7 @@ _STOPWORDS = {
 def normalize_product_name(name: str) -> str:
     """Normalize marketing-heavy product names for comparison."""
     value = name.lower()
+    value = re.sub(r"(?<=\d)\s+(?=gb|tb|mb|inch|in|mm|cm|kg|g\b)", "", value)
     value = re.sub(r"[^a-z0-9]+", " ", value)
     tokens = [token for token in value.split() if token not in _STOPWORDS]
     return " ".join(tokens)

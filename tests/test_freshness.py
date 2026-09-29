@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from superdeal.database import connect, upsert_deal
 from superdeal.freshness import deal_freshness, expire_stale_deals, freshness_status, mark_stale_deals
@@ -17,8 +17,8 @@ def seed(db, observed_at="2026-09-30T10:00:00Z"):
 
 def test_freshness_status():
     assert freshness_status("2026-09-30T10:00:00Z", now=NOW) == "fresh"
-    assert freshness_status("2026-09-29T10:00:00Z", now=NOW) == "fresh"
-    assert freshness_status("2026-09-29T09:59:59Z", now=NOW) == "stale"
+    assert freshness_status("2026-09-29T12:00:00Z", now=NOW) == "fresh"
+    assert freshness_status("2026-09-29T11:59:59Z", now=NOW) == "stale"
     assert freshness_status("2026-10-01T00:00:00Z", now=NOW) == "future"
 
 

@@ -22,19 +22,11 @@ AT_PRICE_RE = re.compile(r"@\s*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)", re.
 PRICE_RE = re.compile(r"(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 
 MERCHANTS = {
-    "amazon.in": "Amazon",
-    "amazon.com": "Amazon",
-    "amzn.to": "Amazon",
-    "flipkart.com": "Flipkart",
-    "fkrt.to": "Flipkart",
-    "myntra.com": "Myntra",
-    "ajio.com": "AJIO",
-    "meesho.com": "Meesho",
-    "croma.com": "Croma",
-    "tatacliq.com": "Tata CLiQ",
-    "nykaa.com": "Nykaa",
+    "amazon.in": "Amazon", "amazon.com": "Amazon", "amzn.to": "Amazon",
+    "flipkart.com": "Flipkart", "fkrt.to": "Flipkart", "myntra.com": "Myntra",
+    "ajio.com": "AJIO", "meesho.com": "Meesho", "croma.com": "Croma",
+    "tatacliq.com": "Tata CLiQ", "nykaa.com": "Nykaa",
 }
-
 
 @dataclass(slots=True)
 class Deal:
@@ -47,10 +39,8 @@ class Deal:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-
 def _clean_url(url: str) -> str:
     return url.rstrip(".,;!?)\]}>\"'")
-
 
 def _merchant(url: str | None) -> str | None:
     if not url:
@@ -60,7 +50,6 @@ def _merchant(url: str | None) -> str | None:
         if host == domain or host.endswith("." + domain):
             return name
     return None
-
 
 def _product_name(text: str) -> str:
     for line in text.splitlines():
@@ -76,35 +65,29 @@ def _product_name(text: str) -> str:
             continue
         if re.fullmatch(r"(?:buy|shop|get)\s+now\W*", line, re.I):
             continue
-        return line[:300]
+        # If a line contains an inline "Deal @ price", retain the product
+        # text before that marker instead of discarding the whole line.
+        line = re.split(r"(?:deal|offer|price|now)\s*@", line, maxsplit=1, flags=re.I)[0].strip()
+        line = re.sub(r"\s*[-:|]+\s*$", "", line).strip()
+        if line:
+            return line[:300]
     return "Unknown product"
 
-
 def _deal_price(text: str) -> int | None:
-    match = DEAL_PRICE_RE.search(text)
-    if not match:
-        match = AT_PRICE_RE.search(text)
+    match = DEAL_PRICE_RE.search(text) or AT_PRICE_RE.search(text)
     if match:
         return int(float(match.group(1).replace(",", "")))
-    # Fallback only when there is exactly one explicit currency price.
     prices = PRICE_RE.findall(text)
     if len(prices) == 1:
         return int(float(prices[0].replace(",", "")))
     return None
 
-
-def parse_deal(
-    text: str,
-    *,
-    source_channel: str | None = None,
-    source_message_id: str | None = None,
-) -> Deal:
+def parse_deal(text: str, *, source_channel: str | None = None,
+               source_message_id: str | None = None) -> Deal:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Deal message must be a non-empty string.")
-
     urls = [_clean_url(u) for u in URL_RE.findall(text)]
     source_url = urls[0] if urls else None
-
     return Deal(
         product_name=_product_name(text),
         deal_price=_deal_price(text),
@@ -112,7 +95,6 @@ def parse_deal(
         merchant=_merchant(source_url),
         raw_text=text,
     )
-
 
 def duplicate_hash(deal: Deal) -> str:
     """Basic duplicate identity; URL is deliberately ignored."""

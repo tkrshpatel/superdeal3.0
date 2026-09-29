@@ -48,14 +48,18 @@ CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 
 
-def connect(database_url: str | Path = "data/superdeal.db") -> sqlite3.Connection:
+def connect(
+    database_url: str | Path = "data/superdeal.db",
+    *,
+    check_same_thread: bool = True,
+) -> sqlite3.Connection:
     """Open SQLite and initialize the schema."""
     path = str(database_url)
     if path.startswith("sqlite:///"):
         path = path[len("sqlite:///") :]
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(path, check_same_thread=check_same_thread)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
@@ -75,11 +79,7 @@ def upsert_deal(
     source_channel: str | None = None,
     source_message_id: str | None = None,
 ) -> int:
-    """Insert a deal or update its latest observation.
-
-    Same deal identity is retained as one canonical row. Each Telegram
-    observation is retained separately so duplicate sources are not lost.
-    """
+    """Insert a deal or update its latest observation."""
     row = connection.execute(
         "SELECT id FROM deals WHERE duplicate_hash = ?",
         (duplicate_hash,),

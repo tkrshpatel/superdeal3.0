@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 
@@ -91,8 +91,13 @@ def make_handler(connection: sqlite3.Connection):
 
 
 def serve(connection: sqlite3.Connection, host: str = "127.0.0.1", port: int = 8000) -> None:
-    """Run the API until interrupted."""
-    server = ThreadingHTTPServer((host, port), make_handler(connection))
+    """Run the API until interrupted.
+
+    The API uses a single-threaded HTTP server because the supplied SQLite
+    connection is thread-bound by default. This keeps the Phase 6 service
+    safe without changing database connection semantics.
+    """
+    server = HTTPServer((host, port), make_handler(connection))
     try:
         server.serve_forever()
     finally:

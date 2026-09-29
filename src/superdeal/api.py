@@ -8,23 +8,48 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 
-def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant: str | None = None, limit: int = 50) -> list[dict]:
-    """Return active deals with optional product/merchant filters."""
+def list_deals(
+    connection: sqlite3.Connection,
+    *,
+    q: str | None = None,
+    merchant: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
+    sort: str = "newest",
+    limit: int = 50,
+) -> list[dict]:
+    """Return active deals with search, price and sort filters."""
     limit = max(1, min(limit, 100))
     clauses = ["status = 'active'"]
     params: list[object] = []
+
     if q:
         clauses.append("LOWER(product_name) LIKE ?")
         params.append(f"%{q.lower()}%")
     if merchant:
         clauses.append("LOWER(merchant) = ?")
         params.append(merchant.lower())
+    if min_price is not None:
+        clauses.append("current_price >= ?")
+        params.append(min_price)
+    if max_price is not None:
+        clauses.append("current_price <= ?")
+        params.append(max_price)
+
+    order_by = {
+        "newest": "last_seen_at DESC",
+        "price_asc": "current_price ASC, last_seen_at DESC",
+        "price_desc": "current_price DESC, last_seen_at DESC",
+    }
+    if sort not in order_by:
+        raise ValueError("sort must be one of: newest, price_asc, price_desc")
+
     rows = connection.execute(
         f"""SELECT id, product_name, merchant, current_price, source_url,
                    status, first_seen_at, last_seen_at
             FROM deals
             WHERE {' AND '.join(clauses)}
-            ORDER BY last_seen_at DESC
+            ORDER BY {order_by[sort]}
             LIMIT ?""",
         (*params, limit),
     ).fetchall()
@@ -62,12 +87,38 @@ def make_handler(connection: sqlite3.Connection):
                 params = parse_qs(parsed.query)
                 q = params.get("q", [None])[0]
                 merchant = params.get("merchant", [None])[0]
+                sort = params.get("sort", ["newest"])[0]
+
                 try:
                     limit = int(params.get("limit", ["50"])[0])
-                except ValueError:
-                    self._send_json({"error": "limit must be an integer"}, 400)
+                    min_price = int(params["min_price"][0]) if "min_price" in params else None
+                    max_price = int(params["max_price"][0]) if "max_price" in params else None
+                    if min_price is not None and min_price < 0:
+                        raise ValueError("min_price must be non-negative")
+                    if max_price is not None and max_price < 0:
+                        raise ValueError("max_price must be non-negative")
+                    if min_price is not None and max_price is not None and min_price > max_price:
+                        raise ValueError("min_price cannot exceed max_price")
+                    if limit < 1:
+                        raise ValueError("limit must be at least 1")
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, 400)
                     return
-                self._send_json({"deals": list_deals(connection, q=q, merchant=merchant, limit=limit)})
+
+                try:
+                    deals = list_deals(
+                        connection,
+                        q=q,
+                        merchant=merchant,
+                        min_price=min_price,
+                        max_price=max_price,
+                        sort=sort,
+                        limit=limit,
+                    )
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, 400)
+                    return
+                self._send_json({"deals": deals})
                 return
             if parsed.path.startswith("/deals/"):
                 raw_id = parsed.path.removeprefix("/deals/")

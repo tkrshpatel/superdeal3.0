@@ -1,0 +1,70 @@
+import json
+import threading
+from http.client import HTTPConnection
+
+from superdeal.api import get_deal, list_deals, make_handler
+from superdeal.database import connect, upsert_deal
+from http.server import ThreadingHTTPServer
+
+
+def seed_db():
+    db = connect(":memory:")
+    upsert_deal(
+        db, duplicate_hash="a", product_name="OnePlus Pad 2", deal_price=29699,
+        merchant="Amazon", source_url="https://amazon.in/pad", raw_text="Pad",
+        observed_at="2026-09-30T00:00:00Z",
+    )
+    upsert_deal(
+        db, duplicate_hash="b", product_name="Wonderchef Cooktop", deal_price=3499,
+        merchant="Flipkart", source_url="https://flipkart.com/cook", raw_text="Cooktop",
+        observed_at="2026-09-30T00:01:00Z",
+    )
+    return db
+
+
+def test_list_deals_filters_and_limits():
+    db = seed_db()
+    assert len(list_deals(db, q="pad")) == 1
+    assert len(list_deals(db, merchant="amazon")) == 1
+    assert len(list_deals(db, limit=1)) == 1
+    assert get_deal(db, 999) is None
+
+
+def test_http_api_health_list_and_detail():
+    db = seed_db()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(db))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = HTTPConnection("127.0.0.1", server.server_port)
+
+        client.request("GET", "/health")
+        response = client.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read())["status"] == "ok"
+
+        client.request("GET", "/deals?q=OnePlus")
+        response = client.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["deals"][0]["product_name"] == "OnePlus Pad 2"
+
+        client.request("GET", "/deals/1")
+        response = client.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["merchant"] == "Amazon"
+
+        client.request("GET", "/deals/999")
+        response = client.getresponse()
+        assert response.status == 404
+
+        client.request("GET", "/unknown")
+        response = client.getresponse()
+        assert response.status == 404
+
+        client.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

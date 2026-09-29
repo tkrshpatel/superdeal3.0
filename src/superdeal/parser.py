@@ -177,12 +177,12 @@ def _classify(text: str, product_name: str) -> str:
         return "reward"
     if "gift voucher" in lower or "gift card" in lower:
         return "gift_voucher"
-    if "coupon" in lower:
+    if "coupon" in lower and not re.search(r"\bdeal\s*@", lower):
         return "coupon"
+    if any(term in lower for term in ("fashion fest", "sale", "campaign")) and not re.search(r"\bdeal\s*@", lower):
+        return "campaign"
     if "cashback" in lower and not re.search(r"\bdeal\s*@", lower):
         return "promotion"
-    if "sale" in lower and not re.search(r"\bdeal\s*@", lower):
-        return "campaign"
     return "product"
 
 
@@ -246,15 +246,15 @@ def parse_deal(
     original_price = _extract_labelled_price(text, ("MRP", "Original", "Was", "Before"))
     deal_price = _extract_labelled_price(text, ("Deal Price", "Offer Price", "Now", "Price"))
 
+    plain_prices = [_price_value(m.group(1)) for m in PLAIN_PRICE_RE.finditer(text)]
+    if deal_price is None and plain_prices:
+        # "Deal @ 341 or 359" means the first advertised deal price.
+        deal_price = plain_prices[0]
+
     prices = [_price_value(m.group(1)) for m in PRICE_RE.finditer(text)]
     if deal_price is None and prices:
         # For a simple product message, a single explicit price is the deal price.
         deal_price = prices[-1]
-
-    if deal_price is None:
-        plain_prices = [_price_value(m.group(1)) for m in PLAIN_PRICE_RE.finditer(text)]
-        if plain_prices:
-            deal_price = plain_prices[-1]
 
     if original_price is None and len(prices) >= 2:
         candidates = [p for p in prices if p != deal_price]
@@ -298,13 +298,21 @@ def parse_deal(
     )
 
 
+def _duplicate_product_key(product_name: str) -> str:
+    """Normalize obvious marketing language before duplicate matching."""
+    value = product_name.lower()
+    value = re.sub(r"\b(?:sale|deal|offer|exclusive|live|today|is|the|wait|over|now)\b", " ", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def duplicate_hash(deal: Deal) -> str:
     """Return a stable basic identity hash for duplicate detection.
 
     URLs and raw message text are deliberately excluded: different Telegram
     channels often publish the same deal with different links and wording.
     """
-    product = re.sub(r"[^a-z0-9]+", " ", deal.product_name.lower()).strip()
+    product = _duplicate_product_key(deal.product_name)
     key = "|".join(
         [
             (deal.merchant or "").lower().strip(),

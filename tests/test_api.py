@@ -50,7 +50,6 @@ def test_http_api_health_list_detail_and_filter_errors():
     thread.start()
     try:
         client = HTTPConnection("127.0.0.1", server.server_port)
-
         client.request("GET", "/health")
         response = client.getresponse()
         assert response.status == 200
@@ -67,6 +66,12 @@ def test_http_api_health_list_detail_and_filter_errors():
         payload = json.loads(response.read())
         assert response.status == 200
         assert payload["merchant"] == "Amazon"
+
+        client.request("GET", "/deals/1/freshness")
+        response = client.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["status"] == "expired"
 
         client.request("GET", "/deals?sort=invalid")
         response = client.getresponse()

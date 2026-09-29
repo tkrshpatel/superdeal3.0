@@ -14,10 +14,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
-DEAL_PRICE_RE = re.compile(
-    r"(?:deal|offer|price|now)\s*@\s*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)",
-    re.IGNORECASE,
-)
+DEAL_PRICE_RE = re.compile(r"(?:deal|offer|price|now)\s*@\s*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 AT_PRICE_RE = re.compile(r"@\s*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 PRICE_RE = re.compile(r"(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 
@@ -57,20 +54,18 @@ def _product_name(text: str) -> str:
         line = re.sub(r"^[\W_]+", "", line).strip()
         if not line:
             continue
-        if re.search(r"(?:deal|offer|price|now)\s*@", line, re.I):
-            continue
+        inline = re.split(r"(?:deal|offer|price|now)\s*@", line, maxsplit=1, flags=re.I)
+        if len(inline) == 2:
+            candidate = inline[0].strip()
+            if candidate:
+                return re.sub(r"\s*[-:|]+\s*$", "", candidate).strip()[:300]
         if re.search(r"(?:₹|Rs\.?|INR)\s*[\d,]+", line, re.I):
             continue
         if re.search(r"\d+\s*%\s*(?:off|discount)", line, re.I):
             continue
         if re.fullmatch(r"(?:buy|shop|get)\s+now\W*", line, re.I):
             continue
-        # If a line contains an inline "Deal @ price", retain the product
-        # text before that marker instead of discarding the whole line.
-        line = re.split(r"(?:deal|offer|price|now)\s*@", line, maxsplit=1, flags=re.I)[0].strip()
-        line = re.sub(r"\s*[-:|]+\s*$", "", line).strip()
-        if line:
-            return line[:300]
+        return line[:300]
     return "Unknown product"
 
 def _deal_price(text: str) -> int | None:
@@ -82,19 +77,12 @@ def _deal_price(text: str) -> int | None:
         return int(float(prices[0].replace(",", "")))
     return None
 
-def parse_deal(text: str, *, source_channel: str | None = None,
-               source_message_id: str | None = None) -> Deal:
+def parse_deal(text: str, *, source_channel: str | None = None, source_message_id: str | None = None) -> Deal:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Deal message must be a non-empty string.")
     urls = [_clean_url(u) for u in URL_RE.findall(text)]
     source_url = urls[0] if urls else None
-    return Deal(
-        product_name=_product_name(text),
-        deal_price=_deal_price(text),
-        source_url=source_url,
-        merchant=_merchant(source_url),
-        raw_text=text,
-    )
+    return Deal(product_name=_product_name(text), deal_price=_deal_price(text), source_url=source_url, merchant=_merchant(source_url), raw_text=text)
 
 def duplicate_hash(deal: Deal) -> str:
     """Basic duplicate identity; URL is deliberately ignored."""

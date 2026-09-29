@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS deals (
     merchant TEXT,
     current_price INTEGER,
     source_url TEXT,
+    affiliate_url TEXT,
     raw_text TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     first_seen_at TEXT NOT NULL,
@@ -63,6 +64,10 @@ def connect(
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(deals)").fetchall()}
+    if "affiliate_url" not in columns:
+        connection.execute("ALTER TABLE deals ADD COLUMN affiliate_url TEXT")
+        connection.commit()
     return connection
 
 
@@ -75,6 +80,7 @@ def upsert_deal(
     merchant: str | None,
     source_url: str | None,
     raw_text: str,
+    affiliate_url: str | None = None,
     observed_at: str,
     source_channel: str | None = None,
     source_message_id: str | None = None,
@@ -90,9 +96,9 @@ def upsert_deal(
         connection.execute(
             """UPDATE deals
                SET product_name = ?, merchant = ?, current_price = ?,
-                   source_url = ?, raw_text = ?, last_seen_at = ?
+                   source_url = ?, affiliate_url = ?, raw_text = ?, last_seen_at = ?
                WHERE id = ?""",
-            (product_name, merchant, deal_price, source_url, raw_text, observed_at, deal_id),
+            (product_name, merchant, deal_price, source_url, affiliate_url, raw_text, observed_at, deal_id),
         )
     else:
         cursor = connection.execute(
@@ -100,7 +106,7 @@ def upsert_deal(
                (duplicate_hash, product_name, merchant, current_price,
                 source_url, raw_text, first_seen_at, last_seen_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (duplicate_hash, product_name, merchant, deal_price, source_url, raw_text,
+            (duplicate_hash, product_name, merchant, deal_price, source_url, affiliate_url, raw_text,
              observed_at, observed_at),
         )
         deal_id = int(cursor.lastrowid)

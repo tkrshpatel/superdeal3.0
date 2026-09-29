@@ -1,10 +1,10 @@
 import json
 import threading
 from http.client import HTTPConnection
+from http.server import HTTPServer
 
 from superdeal.api import get_deal, list_deals, make_handler
 from superdeal.database import connect, upsert_deal
-from http.server import ThreadingHTTPServer
 
 
 def seed_db():
@@ -32,7 +32,7 @@ def test_list_deals_filters_and_limits():
 
 def test_http_api_health_list_and_detail():
     db = seed_db()
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(db))
+    server = HTTPServer(("127.0.0.1", 0), make_handler(db))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

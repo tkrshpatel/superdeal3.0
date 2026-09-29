@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from .parser import Deal
 
 _PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(?:off|discount)", re.I)
-_RETURN_RE = re.compile(r"(\d+)\s*[- ]?day\s*return", re.I)
+_RETURN_RE = re.compile(r"(\d+)\s*[- ]?days?\s*return", re.I)
 _COUPON_RE = re.compile(r"coupon|promo code|voucher", re.I)
 _CARD_RE = re.compile(r"(?:sbi|hdfc|icici|axis|amex|credit card|debit card)", re.I)
 _COD_RE = re.compile(r"cash on delivery|\bcod\b", re.I)

@@ -105,7 +105,7 @@ def upsert_deal(
             """INSERT INTO deals
                (duplicate_hash, product_name, merchant, current_price,
                 source_url, affiliate_url, raw_text, first_seen_at, last_seen_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (duplicate_hash, product_name, merchant, deal_price, source_url, affiliate_url, raw_text,
              observed_at, observed_at),
         )

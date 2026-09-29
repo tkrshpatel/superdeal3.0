@@ -21,7 +21,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK platform
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Install web dependencies
         run: npm install
       - name: Build web app

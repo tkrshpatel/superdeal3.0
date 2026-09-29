@@ -40,6 +40,44 @@ def test_handles_rs_and_unknown_merchant():
     assert deal.merchant is None
 
 
+def test_parses_at_price_and_amazon_short_link():
+    message = """🔥 Lowest : atomberg Efficio Exhaust Fan 200mm (8 Inches) | BLDC Motor
+
+Deal @ 1499 Only
+
+https://amzn.to/4dfDtuG"""
+
+    deal = parse_deal(message)
+
+    assert deal.product_name == "Lowest : atomberg Efficio Exhaust Fan 200mm (8 Inches) | BLDC Motor"
+    assert deal.original_price is None
+    assert deal.deal_price == 1499
+    assert deal.discount_pct is None
+    assert deal.merchant == "Amazon"
+    assert deal.source_url == "https://amzn.to/4dfDtuG"
+
+
+def test_parses_multi_product_coupon_message():
+    message = """📱 Collect Rs.250 off on OPPO & HMD Mobiles for BBD Sale👇👇
+
+Collect in Multiple Accounts
+
+Oppo
+👉 https://fkrt.to/55GPwG89
+
+HMD
+👉 https://fkrt.to/T7F6nXSk"""
+
+    deal = parse_deal(message)
+
+    assert deal.product_name == "Collect Rs.250 off on OPPO & HMD Mobiles for BBD Sale"
+    assert deal.original_price is None
+    assert deal.deal_price is None
+    assert deal.discount_pct is None
+    assert deal.merchant == "Flipkart"
+    assert deal.source_url == "https://fkrt.to/55GPwG89"
+
+
 def test_requires_non_empty_text():
     with pytest.raises(ValueError):
         parse_deal("   ")

@@ -1,7 +1,14 @@
 import './style.css';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+
+const IS_NATIVE = Capacitor.isNativePlatform();
+document.documentElement.classList.toggle('native-app', IS_NATIVE);
 const API_BASE=(globalThis.__SUPERDEAL_API__||'').replace(/\/$/,'');
 const filters=[['trending','🔥','Trending'],['drops','📉','Price drops'],['under499','₹','Under ₹499'],['discount','%','50%+ off'],['ending','⏳','Ending soon']];
-const state={deals:[],active:'trending',saved:new Set(JSON.parse(localStorage.getItem('superdeal-saved')||'[]')),intel:new Map()};
+let savedDeals=[];
+try { savedDeals=JSON.parse(localStorage.getItem('superdeal-saved')||'[]'); if(!Array.isArray(savedDeals)) savedDeals=[]; } catch { savedDeals=[]; }
+const state={deals:[],active:'trending',saved:new Set(savedDeals),intel:new Map()};
 const app=document.querySelector('#app');
 app.innerHTML=`<header class="topbar"><div class="brand-mark"><span class="logo-dot"></span><div><div class="brand">SuperDeal</div><div class="tagline">Deals worth your click.</div></div></div><button class="circle-btn" aria-label="Notifications">♧</button></header><main><section class="hero"><div class="eyebrow">TODAY'S PICKS</div><h1>Spend less.<br><span>Get more.</span></h1><p>Fresh deals, price drops and genuine finds — all in one place.</p></section><section class="search-wrap"><span class="search-icon">⌕</span><input id="search" type="search" placeholder="Search products, brands or deals" autocomplete="off"><button id="clear" class="clear hidden" aria-label="Clear search">×</button></section><section class="chips" aria-label="Deal filters">${filters.map(([id,icon,label],i)=>`<button class="chip ${i===0?'selected':''}" data-filter="${id}"><b>${icon}</b>${label}</button>`).join('')}</section><section class="section-head"><div><div class="eyebrow">CURATED FOR YOU</div><h2 id="section-title">Trending now</h2></div><span id="count"></span></section><section id="deals" class="deal-grid" aria-live="polite"></section></main><nav class="bottom-nav"><button class="active" data-nav="home"><span>⌂</span>Home</button><button data-nav="search"><span>⌕</span>Search</button><button data-nav="saved"><span>♡</span>Saved</button></nav><div id="toast" class="toast" role="status"></div><div id="detail" class="detail hidden"></div>`;
 const dealsEl=document.querySelector('#deals'),countEl=document.querySelector('#count'),searchEl=document.querySelector('#search'),clearEl=document.querySelector('#clear'),sectionTitle=document.querySelector('#section-title'),toast=document.querySelector('#toast'),detail=document.querySelector('#detail');
@@ -19,4 +26,6 @@ searchEl.addEventListener('input',()=>{clearEl.classList.toggle('hidden',!search
 dealsEl.addEventListener('click',e=>{const saveBtn=e.target.closest('[data-save]');if(saveBtn){e.stopPropagation();save(saveBtn.dataset.save);return}const share=e.target.closest('[data-share]');if(share){e.stopPropagation();const d=state.deals.find(x=>String(x.id)===String(share.dataset.share));if(navigator.share)navigator.share({title:d.product_name,text:`${d.product_name} — ${money(d.current_price)}`,url:d.affiliate_url||d.source_url}).catch(()=>{});else navigator.clipboard?.writeText(d.affiliate_url||d.source_url||location.href);return}const open=e.target.closest('[data-open]');if(open)showDetail(open.dataset.open)});
 detail.addEventListener('click',e=>{if(e.target.closest('[data-close]')||e.target===detail)closeDetail()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail()});
 document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-nav]').forEach(x=>x.classList.remove('active'));b.classList.add('active');if(b.dataset.nav==='search')searchEl.focus();if(b.dataset.nav==='saved'){state.active='saved';sectionTitle.textContent='Saved deals';render(filtered())}else if(b.dataset.nav==='home'){state.active='trending';document.querySelectorAll('.chip').forEach((x,i)=>x.classList.toggle('selected',i===0));sectionTitle.textContent='Trending now';render(filtered())}}));
-if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});load();
+if(!IS_NATIVE && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+if(IS_NATIVE) SplashScreen.hide().catch(()=>{});
+load();

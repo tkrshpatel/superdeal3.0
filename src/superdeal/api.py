@@ -93,9 +93,8 @@ def make_handler(connection: sqlite3.Connection):
 def serve(connection: sqlite3.Connection, host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the API until interrupted.
 
-    The API uses a single-threaded HTTP server because the supplied SQLite
-    connection is thread-bound by default. This keeps the Phase 6 service
-    safe without changing database connection semantics.
+    The connection must be opened with check_same_thread=False because the
+    HTTP server loop may run on a different thread than the caller.
     """
     server = HTTPServer((host, port), make_handler(connection))
     try:

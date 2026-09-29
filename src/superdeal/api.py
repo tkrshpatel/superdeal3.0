@@ -53,7 +53,7 @@ def list_deals(
         raise ValueError("sort must be one of: newest, price_asc, price_desc")
 
     rows = connection.execute(
-        f"""SELECT id, product_name, merchant, current_price, source_url,
+        f"""SELECT id, product_name, merchant, current_price, source_url, affiliate_url,
                    status, first_seen_at, last_seen_at
             FROM deals
             WHERE {' AND '.join(clauses)}

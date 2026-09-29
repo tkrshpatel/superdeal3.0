@@ -60,3 +60,14 @@ def test_database_url_style_is_supported(tmp_path):
     path = tmp_path / "db" / "superdeal.db"
     db = connect(f"sqlite:///{path}")
     assert db.execute("SELECT 1").fetchone()[0] == 1
+
+
+def test_affiliate_url_is_persisted():
+    db = connect(":memory:")
+    deal_id = upsert_deal(
+        db, duplicate_hash="aff", product_name="Phone", deal_price=1000,
+        merchant="Amazon", source_url="https://amazon.in/p",
+        affiliate_url="https://example.com/track?id=1", raw_text="Phone",
+        observed_at="2026-09-30T00:00:00Z",
+    )
+    assert get_deal(db, deal_id)["affiliate_url"] == "https://example.com/track?id=1"

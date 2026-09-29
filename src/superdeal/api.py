@@ -7,6 +7,8 @@ import sqlite3
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from .intelligence import get_price_history, price_intelligence
+
 
 def list_deals(
     connection: sqlite3.Connection,
@@ -127,7 +129,8 @@ def make_handler(connection: sqlite3.Connection):
                 self._send_json({"deals": deals})
                 return
             if parsed.path.startswith("/deals/"):
-                raw_id = parsed.path.removeprefix("/deals/")
+                parts = parsed.path.strip("/").split("/")
+                raw_id = parts[1] if len(parts) > 1 else ""
                 try:
                     deal_id = int(raw_id)
                 except ValueError:
@@ -136,8 +139,17 @@ def make_handler(connection: sqlite3.Connection):
                 deal = get_deal(connection, deal_id)
                 if deal is None:
                     self._send_json({"error": "deal not found"}, 404)
-                else:
-                    self._send_json(deal)
+                    return
+                if len(parts) == 3 and parts[2] == "price-history":
+                    self._send_json({"deal_id": deal_id, "history": get_price_history(connection, deal_id)})
+                    return
+                if len(parts) == 3 and parts[2] == "intelligence":
+                    self._send_json(price_intelligence(connection, deal_id))
+                    return
+                if len(parts) != 2:
+                    self._send_json({"error": "not found"}, 404)
+                    return
+                self._send_json(deal)
                 return
             self._send_json({"error": "not found"}, 404)
 

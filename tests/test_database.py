@@ -4,16 +4,9 @@ from superdeal.database import connect, get_deal, upsert_deal
 def test_schema_and_first_insert():
     db = connect(":memory:")
     deal_id = upsert_deal(
-        db,
-        duplicate_hash="abc",
-        product_name="BOLTT EVO",
-        deal_price=8999,
-        merchant="Flipkart",
-        source_url="https://fkrt.to/a",
-        raw_text="BOLTT EVO ₹8,999",
-        observed_at="2026-09-30T00:00:00Z",
-        source_channel="channel_a",
-        source_message_id="1",
+        db, duplicate_hash="abc", product_name="BOLTT EVO", deal_price=8999,
+        merchant="Flipkart", source_url="https://fkrt.to/a", raw_text="BOLTT EVO ₹8,999",
+        observed_at="2026-09-30T00:00:00Z", source_channel="channel_a", source_message_id="1",
     )
     deal = get_deal(db, deal_id)
     assert deal["product_name"] == "BOLTT EVO"
@@ -23,18 +16,16 @@ def test_schema_and_first_insert():
 def test_duplicate_observations_share_one_canonical_deal():
     db = connect(":memory:")
     kwargs = dict(
-        duplicate_hash="same",
-        product_name="BOLTT EVO",
-        deal_price=8999,
-        merchant="Flipkart",
-        raw_text="BOLTT EVO ₹8,999",
+        duplicate_hash="same", product_name="BOLTT EVO", deal_price=8999,
+        merchant="Flipkart", raw_text="BOLTT EVO ₹8,999",
         observed_at="2026-09-30T00:00:00Z",
     )
     first = upsert_deal(db, source_url="https://fkrt.to/a",
                         source_channel="channel_a", source_message_id="1", **kwargs)
-    second = upsert_deal(db, source_url="https://fkrt.to/b",
-                         source_channel="channel_b", source_message_id="2",
-                         **{**kwargs, "observed_at": "2026-09-30T00:01:00Z", "raw_text": "SALE BOLTT EVO ₹8,999"})
+    second = upsert_deal(
+        db, source_url="https://fkrt.to/b", source_channel="channel_b", source_message_id="2",
+        **{**kwargs, "observed_at": "2026-09-30T00:01:00Z", "raw_text": "SALE BOLTT EVO ₹8,999"},
+    )
     assert first == second
     assert db.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 1
     assert db.execute("SELECT COUNT(*) FROM source_observations").fetchone()[0] == 2
@@ -71,3 +62,21 @@ def test_affiliate_url_is_persisted():
         observed_at="2026-09-30T00:00:00Z",
     )
     assert get_deal(db, deal_id)["affiliate_url"] == "https://example.com/track?id=1"
+
+
+def test_web_metadata_is_persisted():
+    db = connect(":memory:")
+    deal_id = upsert_deal(
+        db, duplicate_hash="web", product_name="Phone", deal_price=1000,
+        merchant="Amazon", source_url="https://amazon.in/p", raw_text="Phone",
+        page_title="Phone Pro", canonical_url="https://amazon.in/p/123",
+        image_url="https://amazon.in/i.jpg", verified_price=999,
+        last_verified_at="2026-09-30T01:00:00Z",
+        observed_at="2026-09-30T00:00:00Z",
+    )
+    deal = get_deal(db, deal_id)
+    assert deal["page_title"] == "Phone Pro"
+    assert deal["canonical_url"] == "https://amazon.in/p/123"
+    assert deal["image_url"] == "https://amazon.in/i.jpg"
+    assert deal["verified_price"] == 999
+    assert deal["last_verified_at"] == "2026-09-30T01:00:00Z"

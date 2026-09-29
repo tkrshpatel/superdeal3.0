@@ -43,7 +43,7 @@ https://fkrt.to/514Sx0kH"""
     assert deal.product_name == "New Launch : OPPO K14 Plus 5G"
     assert deal.deal_price == 26000
     assert deal.merchant == "Flipkart"
-    assert any(p.type == "coupon" and p.value == 4000 for p in deal.promotions)
+    assert any(p.type == "bank_offer" and p.value == 4000 for p in deal.promotions)
 
 
 def test_parses_discount_range():
@@ -122,7 +122,7 @@ https://www.amazon.in/dp/B0D7N23QKD?th=1&tag=ganeshji00-21"""
     assert deal.deal_price == 29699
     assert deal.brand == "OnePlus"
     assert deal.merchant == "Amazon"
-    assert any(p.type == "coupon" and p.value == 2000 for p in deal.promotions)
+    assert any(p.type == "bank_offer" and p.value == 2000 for p in deal.promotions)
     assert any(p.type == "cashback" and p.value == 300 for p in deal.promotions)
 
 

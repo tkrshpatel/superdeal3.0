@@ -1,7 +1,5 @@
-"""SQLite persistence for SuperDeal 3.0.
+"""SQLite persistence for SuperDeal 3.0."""
 
-Phase 2 keeps persistence deliberately small and dependency-free.
-"""
 from __future__ import annotations
 
 import sqlite3
@@ -19,6 +17,11 @@ CREATE TABLE IF NOT EXISTS deals (
     current_price INTEGER,
     source_url TEXT,
     affiliate_url TEXT,
+    page_title TEXT,
+    canonical_url TEXT,
+    image_url TEXT,
+    verified_price INTEGER,
+    last_verified_at TEXT,
     raw_text TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     first_seen_at TEXT NOT NULL,
@@ -48,26 +51,31 @@ CREATE INDEX IF NOT EXISTS idx_observations_deal ON source_observations(deal_id)
 CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 
-
-def connect(
-    database_url: str | Path = "data/superdeal.db",
-    *,
-    check_same_thread: bool = True,
-) -> sqlite3.Connection:
-    """Open SQLite and initialize the schema."""
+def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread: bool = True) -> sqlite3.Connection:
+    """Open SQLite and initialize/migrate the schema."""
     path = str(database_url)
     if path.startswith("sqlite:///"):
-        path = path[len("sqlite:///") :]
+        path = path[len("sqlite:///"):]
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, check_same_thread=check_same_thread)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
+
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(deals)").fetchall()}
-    if "affiliate_url" not in columns:
-        connection.execute("ALTER TABLE deals ADD COLUMN affiliate_url TEXT")
-        connection.commit()
+    migrations = {
+        "affiliate_url": "TEXT",
+        "page_title": "TEXT",
+        "canonical_url": "TEXT",
+        "image_url": "TEXT",
+        "verified_price": "INTEGER",
+        "last_verified_at": "TEXT",
+    }
+    for name, definition in migrations.items():
+        if name not in columns:
+            connection.execute(f"ALTER TABLE deals ADD COLUMN {name} {definition}")
+    connection.commit()
     return connection
 
 
@@ -81,14 +89,18 @@ def upsert_deal(
     source_url: str | None,
     raw_text: str,
     affiliate_url: str | None = None,
+    page_title: str | None = None,
+    canonical_url: str | None = None,
+    image_url: str | None = None,
+    verified_price: int | None = None,
+    last_verified_at: str | None = None,
     observed_at: str,
     source_channel: str | None = None,
     source_message_id: str | None = None,
 ) -> int:
     """Insert a deal or update its latest observation."""
     row = connection.execute(
-        "SELECT id FROM deals WHERE duplicate_hash = ?",
-        (duplicate_hash,),
+        "SELECT id FROM deals WHERE duplicate_hash = ?", (duplicate_hash,)
     ).fetchone()
 
     if row:
@@ -96,18 +108,26 @@ def upsert_deal(
         connection.execute(
             """UPDATE deals
                SET product_name = ?, merchant = ?, current_price = ?,
-                   source_url = ?, affiliate_url = ?, raw_text = ?, last_seen_at = ?
+                   source_url = ?, affiliate_url = ?, raw_text = ?, last_seen_at = ?,
+                   page_title = COALESCE(?, page_title),
+                   canonical_url = COALESCE(?, canonical_url),
+                   image_url = COALESCE(?, image_url),
+                   verified_price = COALESCE(?, verified_price),
+                   last_verified_at = COALESCE(?, last_verified_at)
                WHERE id = ?""",
-            (product_name, merchant, deal_price, source_url, affiliate_url, raw_text, observed_at, deal_id),
+            (product_name, merchant, deal_price, source_url, affiliate_url, raw_text, observed_at,
+             page_title, canonical_url, image_url, verified_price, last_verified_at, deal_id),
         )
     else:
         cursor = connection.execute(
             """INSERT INTO deals
-               (duplicate_hash, product_name, merchant, current_price,
-                source_url, affiliate_url, raw_text, first_seen_at, last_seen_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (duplicate_hash, product_name, merchant, deal_price, source_url, affiliate_url, raw_text,
-             observed_at, observed_at),
+               (duplicate_hash, product_name, merchant, current_price, source_url, affiliate_url,
+                page_title, canonical_url, image_url, verified_price, last_verified_at,
+                raw_text, first_seen_at, last_seen_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (duplicate_hash, product_name, merchant, deal_price, source_url, affiliate_url,
+             page_title, canonical_url, image_url, verified_price, last_verified_at,
+             raw_text, observed_at, observed_at),
         )
         deal_id = int(cursor.lastrowid)
 
@@ -122,8 +142,7 @@ def upsert_deal(
     if deal_price is not None:
         latest = connection.execute(
             """SELECT price FROM price_history
-               WHERE deal_id = ? ORDER BY id DESC LIMIT 1""",
-            (deal_id,),
+               WHERE deal_id = ? ORDER BY id DESC LIMIT 1""", (deal_id,)
         ).fetchone()
         if latest is None or int(latest["price"]) != deal_price:
             connection.execute(

@@ -10,16 +10,9 @@ from urllib.parse import parse_qs, urlparse
 from .intelligence import get_price_history, price_intelligence
 
 
-def list_deals(
-    connection: sqlite3.Connection,
-    *,
-    q: str | None = None,
-    merchant: str | None = None,
-    min_price: int | None = None,
-    max_price: int | None = None,
-    sort: str = "newest",
-    limit: int = 50,
-) -> list[dict]:
+def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant: str | None = None,
+               min_price: int | None = None, max_price: int | None = None,
+               sort: str = "newest", limit: int = 50) -> list[dict]:
     """Return active deals with search, price and sort filters."""
     if min_price is not None and min_price < 0:
         raise ValueError("min_price must be non-negative")
@@ -30,7 +23,6 @@ def list_deals(
     limit = max(1, min(limit, 100))
     clauses = ["status = 'active'"]
     params: list[object] = []
-
     if q:
         clauses.append("LOWER(product_name) LIKE ?")
         params.append(f"%{q.lower()}%")
@@ -44,16 +36,14 @@ def list_deals(
         clauses.append("current_price <= ?")
         params.append(max_price)
 
-    order_by = {
-        "newest": "last_seen_at DESC",
-        "price_asc": "current_price ASC, last_seen_at DESC",
-        "price_desc": "current_price DESC, last_seen_at DESC",
-    }
+    order_by = {"newest": "last_seen_at DESC", "price_asc": "current_price ASC, last_seen_at DESC",
+                "price_desc": "current_price DESC, last_seen_at DESC"}
     if sort not in order_by:
         raise ValueError("sort must be one of: newest, price_asc, price_desc")
 
     rows = connection.execute(
         f"""SELECT id, product_name, merchant, current_price, source_url, affiliate_url,
+                   page_title, canonical_url, image_url, verified_price, last_verified_at,
                    status, first_seen_at, last_seen_at
             FROM deals
             WHERE {' AND '.join(clauses)}
@@ -66,7 +56,8 @@ def list_deals(
 
 def get_deal(connection: sqlite3.Connection, deal_id: int) -> dict | None:
     row = connection.execute(
-        """SELECT id, product_name, merchant, current_price, source_url,
+        """SELECT id, product_name, merchant, current_price, source_url, affiliate_url,
+                  page_title, canonical_url, image_url, verified_price, last_verified_at,
                   status, first_seen_at, last_seen_at
            FROM deals WHERE id = ?""",
         (deal_id,),
@@ -96,7 +87,6 @@ def make_handler(connection: sqlite3.Connection):
                 q = params.get("q", [None])[0]
                 merchant = params.get("merchant", [None])[0]
                 sort = params.get("sort", ["newest"])[0]
-
                 try:
                     limit = int(params.get("limit", ["50"])[0])
                     min_price = int(params["min_price"][0]) if "min_price" in params else None
@@ -112,17 +102,9 @@ def make_handler(connection: sqlite3.Connection):
                 except ValueError as exc:
                     self._send_json({"error": str(exc)}, 400)
                     return
-
                 try:
-                    deals = list_deals(
-                        connection,
-                        q=q,
-                        merchant=merchant,
-                        min_price=min_price,
-                        max_price=max_price,
-                        sort=sort,
-                        limit=limit,
-                    )
+                    deals = list_deals(connection, q=q, merchant=merchant, min_price=min_price,
+                                       max_price=max_price, sort=sort, limit=limit)
                 except ValueError as exc:
                     self._send_json({"error": str(exc)}, 400)
                     return
@@ -160,11 +142,7 @@ def make_handler(connection: sqlite3.Connection):
 
 
 def serve(connection: sqlite3.Connection, host: str = "127.0.0.1", port: int = 8000) -> None:
-    """Run the API until interrupted.
-
-    The connection must be opened with check_same_thread=False because the
-    HTTP server loop may run on a different thread than the caller.
-    """
+    """Run the API until interrupted."""
     server = HTTPServer((host, port), make_handler(connection))
     try:
         server.serve_forever()

@@ -10,13 +10,19 @@ from urllib.parse import urlparse
 
 
 PRICE_RE = re.compile(r"(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
+PLAIN_PRICE_RE = re.compile(
+    r"(?:deal\s*@|offer\s*@|now\s*@|price\s*@|@)\s*₹?\s*([\d,]+(?:\.\d{1,2})?)",
+    re.IGNORECASE,
+)
 DISCOUNT_RE = re.compile(r"(\d{1,3})\s*%\s*(?:off|discount)", re.IGNORECASE)
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 
 KNOWN_MERCHANTS = {
     "amazon.in": "Amazon",
     "amazon.com": "Amazon",
+    "amzn.to": "Amazon",
     "flipkart.com": "Flipkart",
+    "fkrt.to": "Flipkart",
     "myntra.com": "Myntra",
     "ajio.com": "AJIO",
     "meesho.com": "Meesho",
@@ -78,7 +84,7 @@ def _product_name(text: str) -> str:
         cleaned = re.sub(r"^[\s\W_]+", "", cleaned).strip()
         if not cleaned:
             continue
-        if re.search(r"(?:₹|Rs\.?|INR)\s*[\d,]+|\d+\s*%\s*(?:off|discount)", cleaned, re.I):
+        if re.search(r"(?:₹|Rs\.?|INR)\s*[\d,]+|(?:deal\s*@|offer\s*@|now\s*@)\s*₹?\s*[\d,]+|\d+\s*%\s*(?:off|discount)", cleaned, re.I):
             continue
         if re.fullmatch(r"(buy\s+now|shop\s+now|get\s+it|click\s+here)\W*", cleaned, re.I):
             continue
@@ -105,6 +111,12 @@ def parse_deal(
     prices = [_price_value(m.group(1)) for m in PRICE_RE.finditer(text)]
     if deal_price is None and prices:
         deal_price = prices[-1]
+
+    if deal_price is None:
+        plain_prices = [_price_value(m.group(1)) for m in PLAIN_PRICE_RE.finditer(text)]
+        if plain_prices:
+            deal_price = plain_prices[-1]
+
     if original_price is None and len(prices) >= 2:
         candidates = [p for p in prices if p != deal_price]
         if candidates:

@@ -34,7 +34,7 @@ def test_duplicate_observations_share_one_canonical_deal():
                         source_channel="channel_a", source_message_id="1", **kwargs)
     second = upsert_deal(db, source_url="https://fkrt.to/b",
                          source_channel="channel_b", source_message_id="2",
-                         observed_at="2026-09-30T00:01:00Z", **{**kwargs, "raw_text": "SALE BOLTT EVO ₹8,999"})
+                         **{**kwargs, "observed_at": "2026-09-30T00:01:00Z", "raw_text": "SALE BOLTT EVO ₹8,999"})
     assert first == second
     assert db.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 1
     assert db.execute("SELECT COUNT(*) FROM source_observations").fetchone()[0] == 2

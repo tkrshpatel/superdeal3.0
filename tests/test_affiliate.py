@@ -1,5 +1,6 @@
-from superdeal.affiliate import build_affiliate_url, normalize_source_url
 import pytest
+
+from superdeal.affiliate import EarnKaroProvider, build_affiliate_url, normalize_source_url
 
 
 def test_normalize_source_url():
@@ -17,3 +18,18 @@ def test_affiliate_url_requires_explicit_provider_output():
         "https://amazon.in/p/123",
         "https://example.com/track?url=https%3A%2F%2Famazon.in%2Fp%2F123",
     ) == "https://example.com/track?url=https%3A%2F%2Famazon.in%2Fp%2F123"
+
+
+def test_earnkaro_provider_accepts_generated_link():
+    link = EarnKaroProvider().attach_link(
+        "https://amazon.in/p/123",
+        "https://earnkaro.com/redirect/example",
+    )
+    assert link.provider == "earnkaro"
+    assert link.source_url == "https://amazon.in/p/123"
+    assert link.affiliate_url == "https://earnkaro.com/redirect/example"
+
+
+def test_earnkaro_provider_rejects_invalid_link():
+    with pytest.raises(ValueError):
+        EarnKaroProvider().attach_link("https://amazon.in/p/123", "not-a-url")

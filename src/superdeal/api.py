@@ -7,6 +7,7 @@ import sqlite3
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from .freshness import deal_freshness
 from .intelligence import get_price_history, price_intelligence
 
 
@@ -45,10 +46,8 @@ def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant
         f"""SELECT id, product_name, merchant, current_price, source_url, affiliate_url,
                    page_title, canonical_url, image_url, verified_price, last_verified_at,
                    status, first_seen_at, last_seen_at
-            FROM deals
-            WHERE {' AND '.join(clauses)}
-            ORDER BY {order_by[sort]}
-            LIMIT ?""",
+            FROM deals WHERE {' AND '.join(clauses)}
+            ORDER BY {order_by[sort]} LIMIT ?""",
         (*params, limit),
     ).fetchall()
     return [dict(row) for row in rows]
@@ -127,6 +126,9 @@ def make_handler(connection: sqlite3.Connection):
                     return
                 if len(parts) == 3 and parts[2] == "intelligence":
                     self._send_json(price_intelligence(connection, deal_id))
+                    return
+                if len(parts) == 3 and parts[2] == "freshness":
+                    self._send_json(deal_freshness(connection, deal_id))
                     return
                 if len(parts) != 2:
                     self._send_json({"error": "not found"}, 404)

@@ -76,6 +76,18 @@ def test_http_api_health_list_detail_and_filter_errors():
         response = client.getresponse()
         assert response.status == 400
 
+        client.request("GET", "/deals/1/price-history")
+        response = client.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["history"][0]["price"] == 29699
+
+        client.request("GET", "/deals/1/intelligence")
+        response = client.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["is_historical_low"] is True
+
         client.request("GET", "/deals/999")
         response = client.getresponse()
         assert response.status == 404

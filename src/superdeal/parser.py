@@ -217,11 +217,11 @@ def _extract_promotions(text: str) -> list[Promotion]:
                 Promotion("bank_offer", _price_value(bank_match.group(1)), line.strip(), payment_method="card")
             )
         if "cashback" in lower:
-            amount = re.search(r"(?:rs\.?|₹)\s*([\d,]+)", line, re.I)
+            amounts = re.findall(r"(?:rs\.?|₹)\s*([\d,]+)", line, re.I)
             pct = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
             value: int | float | str | None = None
-            if amount:
-                value = _price_value(amount.group(1))
+            if amounts:
+                value = _price_value(amounts[-1])
             elif pct:
                 value = float(pct.group(1)) if "." in pct.group(1) else int(pct.group(1))
             promotions.append(Promotion("cashback", value, line.strip()))
@@ -259,7 +259,7 @@ def parse_deal(
     prices = [_price_value(m.group(1)) for m in PRICE_RE.finditer(text)]
     if deal_price is None and prices:
         # For a simple product message, a single explicit price is the deal price.
-        deal_price = prices[-1]
+        deal_price = prices[0]
 
     if original_price is None and len(prices) >= 2:
         candidates = [p for p in prices if p != deal_price]
@@ -274,6 +274,13 @@ def parse_deal(
 
     product_name = _product_name(text)
     deal_type = _classify(text, product_name)
+
+    face_value = None
+    if deal_type == "gift_voucher":
+        gift_match = re.search(r"(?:rs\.?|₹)\s*([\d,]+)\s+(?:[A-Za-z0-9]+\s+)?gift\s+(?:card|voucher)", text, re.I)
+        if gift_match:
+            face_value = _price_value(gift_match.group(1))
+            product_name = re.sub(r"^[^:]*:\s*", "", gift_match.group(0), flags=re.I).strip()
     links = _url_labels(text)
     merchant = _merchant_from_url(source_url)
     brand = _extract_brand(text)
@@ -296,6 +303,7 @@ def parse_deal(
         deal_type=deal_type,
         discount_min_pct=discount_min,
         discount_max_pct=discount_max,
+        face_value=face_value,
         brand=brand,
         campaign=campaign,
         links=links,

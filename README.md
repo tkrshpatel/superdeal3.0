@@ -12,14 +12,34 @@ Each phase follows: **Build → automated test → inspect → user validation �
 2. **Phase 1 — Deal Parser**: turn raw deal messages into structured deal records.
 3. **Phase 2 — Deal Database**: SQLite storage, duplicate detection, status and price history.
 4. **Phase 3 — Telegram Hunter**: ingest approved/public deal sources.
-5. **Phase 4 — Affiliate Layer**: affiliate URL generation and validation.
-6. **Phase 5 — Mobile-first Web**: searchable deal discovery website.
-7. **Phase 6 — Price Intelligence**: price changes, historical lows and deal signals.
-8. **Phase 7 — Automation & Analytics**: continuous processing, alerts and performance tracking.
+5. **Phase 4 — Advanced Deduplication**: identify repeated products while preserving price changes.
+6. **Phase 5 — Deal Enrichment**: extract discount, coupon, card, COD and category signals.
+7. **Phase 6 — Deal API**: expose searchable deals and deal intelligence.
+8. **Phase 7 — Search & Filters**: price, merchant and product filtering.
+9. **Phase 8 — Price Intelligence**: historical lows, changes and observations.
+10. **Phase 9 — Affiliate-ready URLs**: validate provider/source URLs.
+11. **Phase 10 — Web Enrichment**: public page metadata and price verification.
+12. **Phase 11 — Freshness & Expiry**: stale/future/expired deal handling.
+13. **Phase 12 — Verified Affiliate Provider**: EarnKaro-ready provider contract without undocumented API automation.
+14. **Phase 13 — Production Telegram Ingestion**: documented Telegram Bot API source.
+15. **Phase 14 — Automated Ingestion Worker**: continuous channel polling and persistence.
+16. **Phase 15 — Operational Setup**: configuration, logging and Telegram connectivity checks.
+17. **Next — Mobile-first Web**: searchable consumer-facing deal discovery.
 
-## Phase 0
+## Telegram worker configuration
 
-No live Telegram or affiliate credentials are used in this phase.
+Copy `.env.example` into your runtime environment and set:
+
+- `TELEGRAM_BOT_TOKEN` — Telegram Bot API token; keep it secret.
+- `TELEGRAM_CHANNELS` — comma-separated public channel usernames/IDs.
+- `DATABASE_URL` — SQLite database path, for example `sqlite:///data/superdeal.db`.
+- `TELEGRAM_POLL_INTERVAL` — delay between polling cycles.
+- `TELEGRAM_BATCH_LIMIT` — maximum messages fetched per channel per cycle (1–100).
+- `LOG_LEVEL` — logging level, default `INFO`.
+
+The bot must have access to the configured channels. Polling uses Telegram's documented Bot API; this worker does not scrape Telegram user accounts or automate Telegram login.
+
+Before starting ingestion, the runner performs a read-only `getMe` connectivity check. A real token is never committed to the repository.
 
 For a local Python environment:
 

@@ -3,6 +3,8 @@ import threading
 from http.client import HTTPConnection
 from http.server import HTTPServer
 
+import pytest
+
 from superdeal.api import get_deal, list_deals, make_handler
 from superdeal.database import connect, upsert_deal
 
@@ -22,15 +24,26 @@ def seed_db():
     return db
 
 
-def test_list_deals_filters_and_limits():
+def test_list_deals_filters_sort_and_limits():
     db = seed_db()
     assert len(list_deals(db, q="pad")) == 1
     assert len(list_deals(db, merchant="amazon")) == 1
+    assert len(list_deals(db, min_price=3000, max_price=4000)) == 1
+    assert list_deals(db, sort="price_asc")[0]["product_name"] == "Wonderchef Cooktop"
+    assert list_deals(db, sort="price_desc")[0]["product_name"] == "OnePlus Pad 2"
     assert len(list_deals(db, limit=1)) == 1
     assert get_deal(db, 999) is None
 
 
-def test_http_api_health_list_and_detail():
+def test_invalid_filters_raise():
+    db = seed_db()
+    with pytest.raises(ValueError, match="sort"):
+        list_deals(db, sort="random")
+    with pytest.raises(ValueError, match="min_price"):
+        list_deals(db, min_price=4000, max_price=3000)
+
+
+def test_http_api_health_list_detail_and_filter_errors():
     db = seed_db()
     server = HTTPServer(("127.0.0.1", 0), make_handler(db))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -43,7 +56,7 @@ def test_http_api_health_list_and_detail():
         assert response.status == 200
         assert json.loads(response.read())["status"] == "ok"
 
-        client.request("GET", "/deals?q=OnePlus")
+        client.request("GET", "/deals?q=OnePlus&min_price=20000&sort=price_desc")
         response = client.getresponse()
         payload = json.loads(response.read())
         assert response.status == 200
@@ -54,6 +67,14 @@ def test_http_api_health_list_and_detail():
         payload = json.loads(response.read())
         assert response.status == 200
         assert payload["merchant"] == "Amazon"
+
+        client.request("GET", "/deals?sort=invalid")
+        response = client.getresponse()
+        assert response.status == 400
+
+        client.request("GET", "/deals?min_price=4000&max_price=3000")
+        response = client.getresponse()
+        assert response.status == 400
 
         client.request("GET", "/deals/999")
         response = client.getresponse()

@@ -19,6 +19,12 @@ def list_deals(
     limit: int = 50,
 ) -> list[dict]:
     """Return active deals with search, price and sort filters."""
+    if min_price is not None and min_price < 0:
+        raise ValueError("min_price must be non-negative")
+    if max_price is not None and max_price < 0:
+        raise ValueError("max_price must be non-negative")
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise ValueError("min_price cannot exceed max_price")
     limit = max(1, min(limit, 100))
     clauses = ["status = 'active'"]
     params: list[object] = []

@@ -42,13 +42,7 @@ class TelegramAPIError(RuntimeError):
 class TelegramBotSource:
     """Read channel posts through Telegram Bot API long polling."""
 
-    def __init__(
-        self,
-        token: str,
-        *,
-        timeout: int = 25,
-        request: Callable[[str, dict], dict] | None = None,
-    ) -> None:
+    def __init__(self, token: str, *, timeout: int = 25, request: Callable[[str, dict], dict] | None = None) -> None:
         if not token.strip():
             raise ValueError("Telegram bot token is required")
         if timeout < 1:
@@ -71,15 +65,12 @@ class TelegramBotSource:
     def fetch_updates(self, *, limit: int = 100) -> list[dict]:
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
-        updates = self._call(
-            "getUpdates",
-            {
-                "offset": self._offset or None,
-                "limit": limit,
-                "timeout": self.timeout,
-                "allowed_updates": json.dumps(["channel_post", "edited_channel_post"]),
-            },
-        )
+        updates = self._call("getUpdates", {
+            "offset": self._offset or None,
+            "limit": limit,
+            "timeout": self.timeout,
+            "allowed_updates": json.dumps(["channel_post", "edited_channel_post"]),
+        })
         if updates:
             self._offset = max(int(item["update_id"]) for item in updates) + 1
         return updates
@@ -87,29 +78,20 @@ class TelegramBotSource:
     def fetch_messages(self, channel: str, *, limit: int = 100) -> list[TelegramMessage]:
         if limit < 1:
             return []
+        wanted = channel.lstrip("@").lower()
         messages: list[TelegramMessage] = []
         for update in self.fetch_updates(limit=min(limit, 100)):
             payload = update.get("channel_post") or update.get("edited_channel_post")
             if not payload:
                 continue
             chat = payload.get("chat") or {}
-            identifiers = {
-                str(chat.get("id", "")),
-                str(chat.get("username", "")),
-                str(chat.get("title", "")),
-            }
-            if channel not in identifiers:
+            username = str(chat.get("username", "")).lstrip("@").lower()
+            identifiers = {str(chat.get("id", "")), username, str(chat.get("title", "")).lower()}
+            if wanted not in identifiers and channel not in identifiers:
                 continue
             timestamp = datetime.fromtimestamp(int(payload["date"]), tz=timezone.utc).isoformat()
             text = payload.get("text") or payload.get("caption") or ""
-            messages.append(
-                TelegramMessage(
-                    channel=channel,
-                    message_id=str(payload["message_id"]),
-                    text=str(text),
-                    observed_at=timestamp,
-                )
-            )
+            messages.append(TelegramMessage(channel=channel, message_id=str(payload["message_id"]), text=str(text), observed_at=timestamp))
         return messages
 
     def _call(self, method: str, params: dict) -> list | dict:

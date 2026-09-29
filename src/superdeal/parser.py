@@ -49,7 +49,7 @@ class Deal:
 
 
 def _clean_url(url: str) -> str:
-    return url.rstrip(".,;!?)\]}>"'")
+    return url.rstrip(".,;!?)\]}>\"'")
 
 
 def _merchant(url: str | None) -> str | None:

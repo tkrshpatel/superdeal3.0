@@ -211,7 +211,7 @@ def _extract_promotions(text: str) -> list[Promotion]:
             match = re.search(r"(?:rs\.?|₹)\s*([\d,]+)\s*off", line, re.I)
             if match:
                 promotions.append(Promotion("coupon", _price_value(match.group(1)), line.strip()))
-        if "cashback" in lower:
+        bank_match = re.search(r"(?:rs\\.?|₹)\\s*([\\d,]+)\\s*off", line, re.I)\n        if bank_match and ("card" in lower or "cards" in lower):\n            promotions.append(Promotion("bank_offer", _price_value(bank_match.group(1)), line.strip(), payment_method="card"))\n        if "cashback" in lower:
             amount = re.search(r"(?:rs\.?|₹)\s*([\d,]+)", line, re.I)
             pct = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
             value: int | float | str | None = None

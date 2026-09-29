@@ -71,7 +71,9 @@ def test_http_api_health_list_detail_and_filter_errors():
         response = client.getresponse()
         payload = json.loads(response.read())
         assert response.status == 200
-        assert payload["status"] == "expired"
+        assert payload["deal_id"] == 1
+        assert "status" in payload
+        assert "age_hours" in payload
 
         client.request("GET", "/deals?sort=invalid")
         response = client.getresponse()

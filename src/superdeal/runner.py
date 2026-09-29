@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Callable
 
 from .telegram import TelegramBotSource
 from .worker import WorkerConfig, run_forever
@@ -16,10 +17,14 @@ def configure_logging() -> None:
     logging.basicConfig(level=getattr(logging, level, logging.INFO), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
-def check_telegram(config: WorkerConfig) -> dict[str, object]:
+def check_telegram(
+    config: WorkerConfig,
+    *,
+    bot_factory: Callable[[str], TelegramBotSource] = TelegramBotSource,
+) -> dict[str, object]:
     """Verify bot credentials and Telegram API access without ingesting messages."""
     config.validate()
-    bot = TelegramBotSource(config.token)
+    bot = bot_factory(config.token)
     identity = bot.get_me()
     return {"ok": True, "bot": identity}
 

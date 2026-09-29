@@ -178,3 +178,47 @@ def test_duplicate_hash_ignores_url_and_wording():
 def test_requires_non_empty_text():
     with pytest.raises(ValueError):
         parse_deal("   ")
+
+
+def test_gift_voucher_keeps_face_value_and_price():
+    deal = parse_deal(
+        """📣 Cred Offer : Rs.10,000 Flipkart Gift Card @ ₹9,250 only via using 50000 cred coins
+Download cred app
+👉 https://app.cred.club/spQx/y63kwdha"""
+    )
+    assert deal.deal_type == "gift_voucher"
+    assert deal.deal_price == 9250
+    assert deal.face_value == 10000
+    assert deal.merchant == "CRED"
+
+
+def test_bank_offer_is_not_a_coupon():
+    deal = parse_deal(
+        """Deal @ 26000
+Rs.4000 off with multiple cards
+https://fkrt.to/514Sx0kH"""
+    )
+    assert [p.type for p in deal.promotions] == ["bank_offer"]
+
+
+def test_competitor_price_is_not_mrp():
+    deal = parse_deal(
+        """Presto Ultra Strong Disinfectant Toilet Cleaner 5L
+Deal @ 341 or 359
+Harpic price is Rs.900 -1000 for 5L
+Use subscribe and save to get @ 341
+https://amzn.to/3T5vz08"""
+    )
+    assert deal.deal_price == 341
+    assert deal.original_price is None
+
+
+def test_reward_separates_video_link():
+    deal = parse_deal(
+        """Flipkart 120 Supercoin Today
+https://fkrt.to/mkh5KpJQ
+Watch Video in Hindi
+https://youtu.be/YXL4dgcHW0c"""
+    )
+    assert deal.deal_type == "reward"
+    assert any(link.url.startswith("https://youtu.be/") for link in deal.links)

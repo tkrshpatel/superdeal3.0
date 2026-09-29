@@ -8,7 +8,7 @@ from superdeal.database import connect, upsert_deal
 
 
 def seed_db():
-    db = connect(":memory:")
+    db = connect(":memory:", check_same_thread=False)
     upsert_deal(
         db, duplicate_hash="a", product_name="OnePlus Pad 2", deal_price=29699,
         merchant="Amazon", source_url="https://amazon.in/pad", raw_text="Pad",

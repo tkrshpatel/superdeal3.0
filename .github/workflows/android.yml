@@ -26,13 +26,11 @@ jobs:
         with:
           packages: platform-tools
       - name: Install Android SDK platform
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
       - name: Install web dependencies
         run: npm install
       - name: Build web app
         run: npm run build
-      - name: Install Capacitor
-        run: npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
       - name: Generate Android project
         run: npx cap add android
       - name: Sync web assets

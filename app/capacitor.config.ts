@@ -5,7 +5,10 @@ const config: CapacitorConfig = {
   appName: 'SuperDeal',
   webDir: 'dist',
   bundledWebRuntime: false,
-  android: { backgroundColor: '#f7f7f5' },
+  android: {
+    backgroundColor: '#f7f7f5',
+    cleartext: true,
+  },
   plugins: {
     SplashScreen: {
       launchAutoHide: true,

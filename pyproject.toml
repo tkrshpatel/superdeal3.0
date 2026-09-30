@@ -4,10 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "superdeal3"
-version = "0.1.0"
+version = "0.2.0"
 description = "SuperDeal 3.0 deal discovery engine"
 requires-python = ">=3.11"
 dependencies = []
+
+[project.scripts]
+superdeal-api = "superdeal.server:main"
+superdeal-worker = "superdeal.runner:main"
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]

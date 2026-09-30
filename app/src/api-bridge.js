@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import './api-bridge.css';
 
 const native = Capacitor.isNativePlatform();
 const stored = (localStorage.getItem('superdeal-api-base') || '').trim().replace(/\/$/, '');

@@ -6,4 +6,8 @@ venv/
 .env
 *.sqlite3
 data/*.db
+data/*.session
+data/*.session-journal
+data/*.session-shm
+data/*.session-wal
 .DS_Store

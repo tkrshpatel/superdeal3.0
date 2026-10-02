@@ -41,7 +41,7 @@ def check_telegram(
     if config.reader_mode == "hybrid":
         bot, user = build_source(config)
         try:
-            bot_identity = bot_factory(config.token).get_me()
+            bot_identity = bot.get_me()
             user_identity = user.client.get_me()
             return {
                 "ok": True,

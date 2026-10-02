@@ -7,7 +7,7 @@ import os
 from typing import Callable
 
 from .telegram import TelegramBotSource
-from .worker import WorkerConfig, run_forever
+from .worker import WorkerConfig, build_source, run_forever
 
 LOGGER = logging.getLogger("superdeal.worker")
 
@@ -17,22 +17,24 @@ def configure_logging() -> None:
     logging.basicConfig(level=getattr(logging, level, logging.INFO), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
-def check_telegram(
-    config: WorkerConfig,
-    *,
-    bot_factory: Callable[[str], TelegramBotSource] = TelegramBotSource,
-) -> dict[str, object]:
-    """Verify bot credentials and Telegram API access without ingesting messages."""
+def check_telegram(config: WorkerConfig, *, bot_factory: Callable[[str], TelegramBotSource] = TelegramBotSource) -> dict[str, object]:
     config.validate()
+    if config.reader_mode == "user":
+        source = build_source(config)
+        try:
+            me = source.client.get_me()
+            return {"ok": True, "reader": "user", "account": getattr(me, "username", None) or getattr(me, "first_name", None)}
+        finally:
+            source.close()
     bot = bot_factory(config.token)
     identity = bot.get_me()
-    return {"ok": True, "bot": identity}
+    return {"ok": True, "reader": "bot", "bot": identity}
 
 
 def main() -> None:
     configure_logging()
     config = WorkerConfig.from_env()
-    LOGGER.info("Starting SuperDeal Telegram worker for %d channel(s)", len(config.channels))
+    LOGGER.info("Starting SuperDeal Telegram worker in %s reader mode for %d channel(s)", config.reader_mode, len(config.channels))
     check_telegram(config)
     run_forever(config)
 

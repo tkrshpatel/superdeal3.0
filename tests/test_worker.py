@@ -58,4 +58,24 @@ def test_worker_can_persist_to_sqlite(tmp_path):
         assert get_deal(connection, 1)["current_price"] == 29699
     finally:
         connection.close()
-\n\ndef test_hybrid_config_validation():\n    with pytest.raises(ValueError, match="TELEGRAM_API_ID"):\n        WorkerConfig("token", ("@one",), reader_mode="hybrid").validate()\n\n\ndef test_hybrid_run_once_merges_bot_and_user_messages():\n    class Source:\n        def __init__(self, messages): self.messages = messages\n        def fetch_messages_for_channels(self, channels, *, limit=100):\n            return {channel: [m for m in self.messages if m.channel == channel] for channel in channels}\n        def close(self): pass\n\n    bot = Source([TelegramMessage("@one", "1", "Bot deal @ 100 https://example.com/b", "2026-09-29T20:00:00+00:00")])\n    user = Source([\n        TelegramMessage("@one", "1", "Duplicate bot deal @ 100 https://example.com/b", "2026-09-29T20:00:00+00:00"),\n        TelegramMessage("@two", "2", "External deal @ 200 https://example.com/e", "2026-09-29T20:01:00+00:00"),\n    ])\n    config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:", reader_mode="hybrid", api_id="1", api_hash="hash")\n    assert run_once(config, source=(bot, user)) == 2\n
+
+
+def test_hybrid_config_validation():
+    with pytest.raises(ValueError, match="TELEGRAM_API_ID"):
+        WorkerConfig("token", ("@one",), reader_mode="hybrid").validate()
+
+
+def test_hybrid_run_once_merges_bot_and_user_messages():
+    class Source:
+        def __init__(self, messages): self.messages = messages
+        def fetch_messages_for_channels(self, channels, *, limit=100):
+            return {channel: [m for m in self.messages if m.channel == channel] for channel in channels}
+        def close(self): pass
+
+    bot = Source([TelegramMessage("@one", "1", "Bot deal @ 100 https://example.com/b", "2026-09-29T20:00:00+00:00")])
+    user = Source([
+        TelegramMessage("@one", "1", "Duplicate bot deal @ 100 https://example.com/b", "2026-09-29T20:00:00+00:00"),
+        TelegramMessage("@two", "2", "External deal @ 200 https://example.com/e", "2026-09-29T20:01:00+00:00"),
+    ])
+    config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:", reader_mode="hybrid", api_id="1", api_hash="hash")
+    assert run_once(config, source=(bot, user)) == 2

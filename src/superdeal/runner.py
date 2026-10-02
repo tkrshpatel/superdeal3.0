@@ -28,7 +28,7 @@ def check_telegram(config: WorkerConfig, *, bot_factory: Callable[[str], Telegra
             source.close()
     bot = bot_factory(config.token)
     identity = bot.get_me()
-    return {"ok": True, "reader": "bot", "bot": identity}
+    return {"ok": True, "bot": identity}
 
 
 def main() -> None:

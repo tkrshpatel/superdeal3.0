@@ -68,4 +68,3 @@ def run_forever(
     while True:
         run_once(config, source=source)
         sleep(config.poll_interval)
-"

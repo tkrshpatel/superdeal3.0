@@ -1,4 +1,4 @@
-"""Telegram ingestion adapters for SuperDeal 3.0."""
+""""Telegram ingestion adapters for SuperDeal 3.0."""
 
 from __future__ import annotations
 
@@ -22,6 +22,11 @@ class TelegramSource(Protocol):
     def fetch_messages(self, channel: str, *, limit: int = 100) -> Iterable[TelegramMessage]:
         ...
 
+    def fetch_messages_for_channels(
+        self, channels: Iterable[str], *, limit: int = 100
+    ) -> dict[str, list[TelegramMessage]]:
+        ...
+
 
 class MockTelegramSource:
     """Deterministic source used by tests and local development."""
@@ -33,6 +38,11 @@ class MockTelegramSource:
         if limit < 1:
             return []
         return [message for message in self._messages if message.channel == channel][:limit]
+
+    def fetch_messages_for_channels(
+        self, channels: Iterable[str], *, limit: int = 100
+    ) -> dict[str, list[TelegramMessage]]:
+        return {channel: self.fetch_messages(channel, limit=limit) for channel in channels}
 
 
 class TelegramAPIError(RuntimeError):
@@ -75,24 +85,46 @@ class TelegramBotSource:
             self._offset = max(int(item["update_id"]) for item in updates) + 1
         return updates
 
-    def fetch_messages(self, channel: str, *, limit: int = 100) -> list[TelegramMessage]:
-        if limit < 1:
-            return []
-        wanted = channel.lstrip("@").lower()
-        messages: list[TelegramMessage] = []
-        for update in self.fetch_updates(limit=min(limit, 100)):
+    def _messages_from_updates(
+        self, updates: Iterable[dict], channels: Iterable[str], limit: int
+    ) -> dict[str, list[TelegramMessage]]:
+        configured = tuple(channels)
+        result = {channel: [] for channel in configured}
+        wanted = {channel: channel.lstrip("@").lower() for channel in configured}
+        for update in updates:
             payload = update.get("channel_post") or update.get("edited_channel_post")
             if not payload:
                 continue
             chat = payload.get("chat") or {}
             username = str(chat.get("username", "")).lstrip("@").lower()
             identifiers = {str(chat.get("id", "")), username, str(chat.get("title", "")).lower()}
-            if wanted not in identifiers and channel not in identifiers:
-                continue
             timestamp = datetime.fromtimestamp(int(payload["date"]), tz=timezone.utc).isoformat()
             text = payload.get("text") or payload.get("caption") or ""
-            messages.append(TelegramMessage(channel=channel, message_id=str(payload["message_id"]), text=str(text), observed_at=timestamp))
-        return messages
+            message = TelegramMessage(
+                channel="",
+                message_id=str(payload["message_id"]),
+                text=str(text),
+                observed_at=timestamp,
+            )
+            for channel in configured:
+                if wanted[channel] in identifiers or channel in identifiers:
+                    if len(result[channel]) < limit:
+                        result[channel].append(
+                            TelegramMessage(channel=channel, message_id=message.message_id, text=message.text, observed_at=message.observed_at)
+                        )
+        return result
+
+    def fetch_messages_for_channels(
+        self, channels: Iterable[str], *, limit: int = 100
+    ) -> dict[str, list[TelegramMessage]]:
+        if limit < 1:
+            return {channel: [] for channel in channels}
+        configured = tuple(channels)
+        updates = self.fetch_updates(limit=min(limit * max(len(configured), 1), 100))
+        return self._messages_from_updates(updates, configured, limit)
+
+    def fetch_messages(self, channel: str, *, limit: int = 100) -> list[TelegramMessage]:
+        return self.fetch_messages_for_channels((channel,), limit=limit).get(channel, [])
 
     def _call(self, method: str, params: dict) -> list | dict:
         cleaned = {key: value for key, value in params.items() if value is not None}
@@ -100,3 +132,4 @@ class TelegramBotSource:
         if not payload.get("ok"):
             raise TelegramAPIError(payload.get("description", f"Telegram {method} failed"))
         return payload.get("result", [])
+"

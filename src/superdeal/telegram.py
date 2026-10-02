@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Iterable, Protocol
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+LOGGER = logging.getLogger("superdeal.telegram")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +52,43 @@ class TelegramAPIError(RuntimeError):
     """Raised when Telegram returns an unsuccessful Bot API response."""
 
 
+def _normalize_channel_config(channel: str) -> str:
+    """Normalize a configured Telegram channel identifier.
+
+    Supported identifiers are numeric chat IDs, @public usernames, or plain
+    usernames. Invite-link tokens are intentionally not treated as usernames.
+    """
+    value = channel.strip()
+    if not value:
+        return value
+    if value.startswith("@"):
+        return value[1:].lower()
+    return value.lower()
+
+
+def _chat_matches_config(chat: dict, configured: str) -> bool:
+    """Return whether a Telegram chat matches a configured identifier."""
+    value = configured.strip()
+    normalized = _normalize_channel_config(value)
+    chat_id = str(chat.get("id", "")).strip()
+    username = str(chat.get("username", "")).strip().lstrip("@").lower()
+    title = str(chat.get("title", "")).strip().lower()
+
+    if not normalized:
+        return False
+
+    # Numeric Telegram chat IDs are the most reliable identifier.
+    if normalized.lstrip("-").isdigit():
+        return normalized == chat_id
+
+    # Telegram public usernames are optional; private channels normally have
+    # no username, so a username configuration cannot match them.
+    if normalized.startswith("+"):
+        return False
+
+    return normalized == username or normalized == title
+
+
 class TelegramBotSource:
     """Read channel posts through Telegram Bot API long polling."""
 
@@ -75,12 +115,15 @@ class TelegramBotSource:
     def fetch_updates(self, *, limit: int = 100) -> list[dict]:
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
-        updates = self._call("getUpdates", {
-            "offset": self._offset or None,
-            "limit": limit,
-            "timeout": self.timeout,
-            "allowed_updates": json.dumps(["channel_post", "edited_channel_post"]),
-        })
+        updates = self._call(
+            "getUpdates",
+            {
+                "offset": self._offset or None,
+                "limit": limit,
+                "timeout": self.timeout,
+                "allowed_updates": json.dumps(["channel_post", "edited_channel_post"]),
+            },
+        )
         if updates:
             self._offset = max(int(item["update_id"]) for item in updates) + 1
         return updates
@@ -90,32 +133,53 @@ class TelegramBotSource:
     ) -> dict[str, list[TelegramMessage]]:
         configured = tuple(channels)
         result = {channel: [] for channel in configured}
-        wanted = {channel: channel.lstrip("@").lower() for channel in configured}
+        matched_update_ids: set[int] = set()
+
         for update in updates:
             payload = update.get("channel_post") or update.get("edited_channel_post")
             if not payload:
                 continue
+
             chat = payload.get("chat") or {}
-            username = str(chat.get("username", "")).lstrip("@").lower()
-            identifiers = {
-                str(chat.get("id", "")),
-                username,
-                str(chat.get("title", "")).lower(),
-            }
-            timestamp = datetime.fromtimestamp(int(payload["date"]), tz=timezone.utc).isoformat()
+            matched_channels = [
+                channel for channel in configured if _chat_matches_config(chat, channel)
+            ]
+
+            if not matched_channels:
+                LOGGER.warning(
+                    "Ignoring Telegram update %s from unconfigured channel: id=%s title=%r username=%r",
+                    update.get("update_id"),
+                    chat.get("id"),
+                    chat.get("title"),
+                    chat.get("username"),
+                )
+                continue
+
+            matched_update_ids.add(int(update["update_id"]))
+            timestamp = datetime.fromtimestamp(
+                int(payload["date"]), tz=timezone.utc
+            ).isoformat()
             text = payload.get("text") or payload.get("caption") or ""
             message_id = str(payload["message_id"])
-            for channel in configured:
-                if wanted[channel] in identifiers or channel in identifiers:
-                    if len(result[channel]) < limit:
-                        result[channel].append(
-                            TelegramMessage(
-                                channel=channel,
-                                message_id=message_id,
-                                text=str(text),
-                                observed_at=timestamp,
-                            )
+
+            for channel in matched_channels:
+                if len(result[channel]) < limit:
+                    result[channel].append(
+                        TelegramMessage(
+                            channel=channel,
+                            message_id=message_id,
+                            text=str(text),
+                            observed_at=timestamp,
                         )
+                    )
+
+        if updates:
+            total = len(tuple(updates)) if not isinstance(updates, list) else len(updates)
+            LOGGER.debug(
+                "Telegram routing matched %d/%d update(s)",
+                len(matched_update_ids),
+                total,
+            )
         return result
 
     def fetch_messages_for_channels(

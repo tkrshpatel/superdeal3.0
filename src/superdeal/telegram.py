@@ -86,7 +86,8 @@ def _chat_matches_config(chat: dict, configured: str) -> bool:
     if normalized.startswith("+"):
         return False
 
-    normalized_text = " ".join(normalized.split())\n    return normalized_text == username or normalized_text == title
+    normalized_text = " ".join(normalized.split())
+    return normalized_text == username or normalized_text == title
 
 
 class TelegramBotSource:

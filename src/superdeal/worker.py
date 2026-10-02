@@ -1,7 +1,8 @@
-""""Continuous Telegram ingestion orchestration."""
+"""Continuous Telegram ingestion orchestration."""
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from typing import Callable
 from .database import connect
 from .ingest import ingest_messages
 from .telegram import TelegramBotSource
+
+LOGGER = logging.getLogger("superdeal.worker")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,10 +52,18 @@ def run_once(config: WorkerConfig, *, source: TelegramBotSource | None = None) -
         messages_by_channel = telegram.fetch_messages_for_channels(
             config.channels, limit=config.batch_limit
         )
-        return sum(
+        received = sum(len(messages) for messages in messages_by_channel.values())
+        LOGGER.info(
+            "Telegram poll received %d message(s) across %d configured channel(s)",
+            received,
+            len(config.channels),
+        )
+        processed = sum(
             ingest_messages(connection, messages_by_channel.get(channel, []))
             for channel in config.channels
         )
+        LOGGER.info("Telegram poll ingested %d deal(s)", processed)
+        return processed
     finally:
         connection.close()
 
@@ -65,6 +76,10 @@ def run_forever(
 ) -> None:
     """Continuously ingest configured channels until the process is stopped."""
     config.validate()
+    telegram = source or TelegramBotSource(config.token)
     while True:
-        run_once(config, source=source)
+        try:
+            run_once(config, source=telegram)
+        except Exception:
+            LOGGER.exception("Telegram polling cycle failed; retrying")
         sleep(config.poll_interval)

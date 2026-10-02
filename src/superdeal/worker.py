@@ -1,4 +1,4 @@
-"""Continuous Telegram ingestion orchestration."""
+""""Continuous Telegram ingestion orchestration."""
 
 from __future__ import annotations
 
@@ -46,13 +46,13 @@ def run_once(config: WorkerConfig, *, source: TelegramBotSource | None = None) -
     telegram = source or TelegramBotSource(config.token)
     connection = connect(config.database_url, check_same_thread=False)
     try:
-        processed = 0
-        for channel in config.channels:
-            processed += ingest_messages(
-                connection,
-                telegram.fetch_messages(channel, limit=config.batch_limit),
-            )
-        return processed
+        messages_by_channel = telegram.fetch_messages_for_channels(
+            config.channels, limit=config.batch_limit
+        )
+        return sum(
+            ingest_messages(connection, messages_by_channel.get(channel, []))
+            for channel in config.channels
+        )
     finally:
         connection.close()
 
@@ -68,3 +68,4 @@ def run_forever(
     while True:
         run_once(config, source=source)
         sleep(config.poll_interval)
+"

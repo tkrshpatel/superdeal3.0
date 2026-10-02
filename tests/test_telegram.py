@@ -48,6 +48,71 @@ def test_channel_posts_are_converted_to_messages_and_offset_advances():
     assert calls[1][1]["offset"] == 11
 
 
+def test_private_channel_without_username_matches_numeric_chat_id():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 20,
+                    "channel_post": {
+                        "message_id": 88,
+                        "date": 1790000000,
+                        "chat": {"id": -1004397807961, "title": "Super Deals 3.0"},
+                        "text": "Samsung 1TB SSD @ 5999",
+                    },
+                }
+            ],
+        }
+    ])
+
+    messages = client.fetch_messages("-1004397807961")
+    assert len(messages) == 1
+    assert messages[0].message_id == "88"
+
+
+def test_numeric_chat_id_with_at_prefix_is_supported():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 21,
+                    "channel_post": {
+                        "message_id": 89,
+                        "date": 1790000000,
+                        "chat": {"id": -1004397807961, "title": "Super Deals 3.0"},
+                        "text": "SSD @ 5999",
+                    },
+                }
+            ],
+        }
+    ])
+
+    assert len(client.fetch_messages("@-1004397807961")) == 1
+
+
+def test_invite_token_does_not_match_a_channel_username():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 22,
+                    "channel_post": {
+                        "message_id": 90,
+                        "date": 1790000000,
+                        "chat": {"id": -1004397807961, "title": "Super Deals 3.0"},
+                        "text": "Should not match",
+                    },
+                }
+            ],
+        }
+    ])
+
+    assert client.fetch_messages("@+a6CzJXbwHeMyYWZl") == []
+
+
 def test_caption_is_supported():
     client, _ = make_client([
         {

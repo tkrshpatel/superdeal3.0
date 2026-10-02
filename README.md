@@ -49,3 +49,30 @@ pytest
 ```
 
 CI runs the tests remotely on GitHub Actions, so the product owner does not need Python installed locally.
+
+
+## Telegram reader modes
+
+SuperDeal supports two Telegram ingestion modes.
+
+**Bot mode** is the existing path for channels where the bot has access.
+
+**User mode** is for external/public channels such as https://t.me/amazinglootsdealsoffers. It uses an authenticated Telegram user account through MTProto/Telethon. The account must itself be able to access the channel.
+
+Set:
+TELEGRAM_READER_MODE=user
+TELEGRAM_API_ID=<api id>
+TELEGRAM_API_HASH=<api hash>
+TELEGRAM_SESSION=data/telegram_user
+TELEGRAM_CHANNELS=https://t.me/amazinglootsdealsoffers,@another_public_channel
+
+One-time setup:
+1. Get API ID and API hash from my.telegram.org under API development tools.
+2. Put them in the local .env.
+3. Run python -m superdeal.telegram_login.
+4. Complete Telegram's login code and 2FA prompt if requested.
+5. Start the normal worker.
+
+The session file is local and ignored by Git. Do not share it.
+
+User mode accepts public t.me URLs, public usernames, and numeric IDs already known to the account. Invite-link tokens are not silently treated as public usernames.

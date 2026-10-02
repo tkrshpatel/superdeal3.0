@@ -11,7 +11,7 @@ from typing import Callable
 from .database import connect
 from .ingest import ingest_messages
 from .telegram import TelegramBotSource
-from .telegram_user import TelegramUserReaderError, TelegramUserSource
+from .telegram_user import TelegramUserSource
 
 LOGGER = logging.getLogger("superdeal.worker")
 

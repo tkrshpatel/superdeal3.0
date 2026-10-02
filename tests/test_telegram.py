@@ -146,3 +146,47 @@ def test_token_and_limits_are_validated():
     client, _ = make_client([])
     with pytest.raises(ValueError):
         client.fetch_updates(limit=101)
+
+
+def test_channel_name_matching_is_case_and_whitespace_insensitive():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 30,
+                    "channel_post": {
+                        "message_id": 31,
+                        "date": 1790000000,
+                        "chat": {"id": -1004397807961, "title": "  Super   Deals 3.0  "},
+                        "text": "Name matching @ 5999",
+                    },
+                }
+            ],
+        }
+    ])
+
+    messages = client.fetch_messages(" super deals 3.0 ")
+    assert len(messages) == 1
+    assert messages[0].message_id == "31"
+
+
+def test_public_username_matching_remains_case_insensitive():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 32,
+                    "channel_post": {
+                        "message_id": 33,
+                        "date": 1790000000,
+                        "chat": {"id": -100123, "username": "Deal_Channel", "title": "Deals"},
+                        "text": "Username matching @ 5999",
+                    },
+                }
+            ],
+        }
+    ])
+
+    assert len(client.fetch_messages("@DEAL_CHANNEL")) == 1

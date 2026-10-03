@@ -14,12 +14,12 @@ def seed_db():
     upsert_deal(
         db, duplicate_hash="a", product_name="OnePlus Pad 2", deal_price=29699,
         merchant="Amazon", source_url="https://amazon.in/pad", raw_text="Pad",
-        observed_at="2026-09-30T00:00:00Z",
+        observed_at=now,
     )
     upsert_deal(
         db, duplicate_hash="b", product_name="Wonderchef Cooktop", deal_price=3499,
         merchant="Flipkart", source_url="https://flipkart.com/cook", raw_text="Cooktop",
-        observed_at="2026-09-30T00:01:00Z",
+        observed_at=now,
     )
     return db
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,9 @@ CREATE TABLE IF NOT EXISTS telegram_raw_messages (
     raw_text TEXT NOT NULL,
     observed_at TEXT NOT NULL,
     ingested_at TEXT NOT NULL,
+    content_hash TEXT,
+    is_duplicate INTEGER NOT NULL DEFAULT 0,
+    duplicate_of_id INTEGER REFERENCES telegram_raw_messages(id),
     UNIQUE(source_channel, source_message_id)
 );
 
@@ -58,7 +62,10 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
 CREATE INDEX IF NOT EXISTS idx_observations_deal ON source_observations(deal_id);
-CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel ON telegram_raw_messages(source_channel, source_message_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel
+    ON telegram_raw_messages(source_channel, source_message_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_content_hash
+    ON telegram_raw_messages(content_hash);
 CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 
@@ -86,6 +93,47 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
     for name, definition in migrations.items():
         if name not in columns:
             connection.execute(f"ALTER TABLE deals ADD COLUMN {name} {definition}")
+
+    raw_columns = {
+        row["name"] for row in connection.execute(
+            "PRAGMA table_info(telegram_raw_messages)"
+        ).fetchall()
+    }
+    raw_migrations = {
+        "content_hash": "TEXT",
+        "is_duplicate": "INTEGER NOT NULL DEFAULT 0",
+        "duplicate_of_id": "INTEGER",
+    }
+    for name, definition in raw_migrations.items():
+        if name not in raw_columns:
+            connection.execute(
+                f"ALTER TABLE telegram_raw_messages ADD COLUMN {name} {definition}"
+            )
+
+    # Backfill duplicate metadata for raw messages that predate this schema.
+    legacy_rows = connection.execute(
+        "SELECT id, raw_text FROM telegram_raw_messages "
+        "WHERE content_hash IS NULL ORDER BY id"
+    ).fetchall()
+    for row in legacy_rows:
+        content_hash = hashlib.sha256(row["raw_text"].encode("utf-8")).hexdigest()
+        canonical = connection.execute(
+            """SELECT id FROM telegram_raw_messages
+               WHERE content_hash = ? AND raw_text = ? AND id < ?
+               ORDER BY id LIMIT 1""",
+            (content_hash, row["raw_text"], row["id"]),
+        ).fetchone()
+        connection.execute(
+            """UPDATE telegram_raw_messages
+               SET content_hash = ?, is_duplicate = ?, duplicate_of_id = ?
+               WHERE id = ?""",
+            (
+                content_hash,
+                1 if canonical else 0,
+                int(canonical["id"]) if canonical else None,
+                row["id"],
+            ),
+        )
     connection.commit()
     return connection
 
@@ -99,25 +147,56 @@ def record_raw_telegram_message(
     observed_at: str,
     ingested_at: str | None = None,
 ) -> bool:
-    """Persist the original Telegram message before parsing.
+    """Persist the exact Telegram payload and tag exact-text duplicates.
 
-    The raw ledger is the source of truth for Telegram ingestion. It is
-    committed independently so a later parser/enrichment failure cannot lose
-    the original message.
+    Duplicate detection is deliberately based only on the original message
+    text. The first stored occurrence is canonical; later occurrences are
+    retained in the raw ledger but marked as duplicates.
     """
     if not source_channel or not source_message_id:
         raise ValueError("source_channel and source_message_id are required")
     if not isinstance(raw_text, str):
         raise TypeError("raw_text must be a string")
+
     timestamp = ingested_at or observed_at
-    cursor = connection.execute(
-        """INSERT OR IGNORE INTO telegram_raw_messages
-           (source_channel, source_message_id, raw_text, observed_at, ingested_at)
-           VALUES (?, ?, ?, ?, ?)""",
-        (source_channel, source_message_id, raw_text, observed_at, timestamp),
+    content_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+
+    existing_message = connection.execute(
+        """SELECT id FROM telegram_raw_messages
+           WHERE source_channel = ? AND source_message_id = ?""",
+        (source_channel, source_message_id),
+    ).fetchone()
+    if existing_message:
+        return False
+
+    canonical = connection.execute(
+        """SELECT id FROM telegram_raw_messages
+           WHERE content_hash = ? AND raw_text = ?
+           ORDER BY id LIMIT 1""",
+        (content_hash, raw_text),
+    ).fetchone()
+
+    is_duplicate = 1 if canonical else 0
+    duplicate_of_id = int(canonical["id"]) if canonical else None
+
+    connection.execute(
+        """INSERT INTO telegram_raw_messages
+           (source_channel, source_message_id, raw_text, observed_at, ingested_at,
+            content_hash, is_duplicate, duplicate_of_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            source_channel,
+            source_message_id,
+            raw_text,
+            observed_at,
+            timestamp,
+            content_hash,
+            is_duplicate,
+            duplicate_of_id,
+        ),
     )
     connection.commit()
-    return cursor.rowcount == 1
+    return True
 
 
 def upsert_deal(

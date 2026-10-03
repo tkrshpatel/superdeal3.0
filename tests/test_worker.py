@@ -79,3 +79,11 @@ def test_hybrid_run_once_merges_bot_and_user_messages():
     ])
     config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:", reader_mode="hybrid", api_id="1", api_hash="hash")
     assert run_once(config, source=(bot, user)) == 2
+
+def test_exact_duplicate_telegram_messages_are_not_processed_twice():
+    source = MockTelegramSource([
+        TelegramMessage("@one", "1", "Same deal @ 100 https://example.com/p", "2026-10-03T07:00:00+00:00"),
+        TelegramMessage("@two", "2", "Same deal @ 100 https://example.com/p", "2026-10-03T07:01:00+00:00"),
+    ])
+    config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:")
+    assert run_once(config, source=source) == 1

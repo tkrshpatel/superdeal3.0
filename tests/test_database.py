@@ -107,7 +107,7 @@ def test_raw_telegram_message_is_preserved_exactly():
     )
     assert record_raw_telegram_message(
         db,
-        source_channel="@amazinglootsdeals",
+        source_channel="@amazinglootsdealsoffers",
         source_message_id="12345",
         raw_text="changed",
         observed_at="later",

@@ -42,11 +42,11 @@ CREATE TABLE IF NOT EXISTS source_observations (
 CREATE TABLE IF NOT EXISTS telegram_raw_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_channel TEXT NOT NULL,
-    source_message_id TEXT NOT NULL,
-    raw_text TEXT NOT NULL,
-    observed_at TEXT NOT NULL,
+    telegram_message_id TEXT NOT NULL,
+    telegram_message_timestamp TEXT NOT NULL,
     ingested_at TEXT NOT NULL,
-    UNIQUE(source_channel, source_message_id)
+    original_message_text TEXT NOT NULL,
+    UNIQUE(source_channel, telegram_message_id)
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
 CREATE INDEX IF NOT EXISTS idx_observations_deal ON source_observations(deal_id);
-CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel ON telegram_raw_messages(source_channel, source_message_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel ON telegram_raw_messages(source_channel, telegram_message_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 
@@ -73,6 +73,14 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
+
+    raw_columns = {row["name"] for row in connection.execute("PRAGMA table_info(telegram_raw_messages)").fetchall()}
+    if "source_message_id" in raw_columns:
+        connection.execute("ALTER TABLE telegram_raw_messages RENAME COLUMN source_message_id TO telegram_message_id")
+        connection.execute("ALTER TABLE telegram_raw_messages RENAME COLUMN observed_at TO telegram_message_timestamp")
+        connection.execute("ALTER TABLE telegram_raw_messages RENAME COLUMN raw_text TO original_message_text")
+        connection.execute("DROP INDEX IF EXISTS idx_telegram_raw_messages_channel")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel ON telegram_raw_messages(source_channel, telegram_message_id)")
 
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(deals)").fetchall()}
     migrations = {
@@ -99,12 +107,7 @@ def record_raw_telegram_message(
     observed_at: str,
     ingested_at: str | None = None,
 ) -> bool:
-    """Persist the original Telegram message before parsing.
-
-    The raw ledger is the source of truth for Telegram ingestion. It is
-    committed independently so a later parser/enrichment failure cannot lose
-    the original message.
-    """
+    """Store the original Telegram message without parsing or transformation."""
     if not source_channel or not source_message_id:
         raise ValueError("source_channel and source_message_id are required")
     if not isinstance(raw_text, str):
@@ -112,9 +115,10 @@ def record_raw_telegram_message(
     timestamp = ingested_at or observed_at
     cursor = connection.execute(
         """INSERT OR IGNORE INTO telegram_raw_messages
-           (source_channel, source_message_id, raw_text, observed_at, ingested_at)
+           (source_channel, telegram_message_id, telegram_message_timestamp,
+            ingested_at, original_message_text)
            VALUES (?, ?, ?, ?, ?)""",
-        (source_channel, source_message_id, raw_text, observed_at, timestamp),
+        (source_channel, source_message_id, observed_at, timestamp, raw_text),
     )
     connection.commit()
     return cursor.rowcount == 1

@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from .database import connect
+from .earnkaro import process_pending_earnkaro, queue_unique_telegram_messages
 from .ingest import ingest_messages
 from .telegram import TelegramBotSource, TelegramMessage
 from .telegram_user import TelegramUserReaderError, TelegramUserSource
@@ -148,7 +149,14 @@ def run_once(config: WorkerConfig, *, source=None) -> int:
             ingest_messages(connection, messages_by_channel.get(channel, []))
             for channel in config.channels
         )
-        LOGGER.info("Telegram poll ingested %d deal(s)", processed)
+        queued = queue_unique_telegram_messages(connection, limit=config.batch_limit)
+        converted = process_pending_earnkaro(connection, limit=config.batch_limit)
+        LOGGER.info(
+            "Telegram poll ingested %d deal(s); queued %d EarnKaro job(s); processed %d EarnKaro job(s)",
+            processed,
+            queued,
+            converted,
+        )
         return processed
     finally:
         connection.close()
@@ -159,9 +167,13 @@ def _ingest_stream_message(
     message: TelegramMessage,
 ) -> None:
     processed = ingest_messages(connection, [message])
+    queued = queue_unique_telegram_messages(connection, limit=1)
+    converted = process_pending_earnkaro(connection, limit=1)
     LOGGER.info(
-        "Telegram stream persisted %d deal(s): channel=%s message_id=%s",
+        "Telegram stream persisted %d deal(s); queued %d EarnKaro job(s); processed %d EarnKaro job(s): channel=%s message_id=%s",
         processed,
+        queued,
+        converted,
         message.channel,
         message.message_id,
     )

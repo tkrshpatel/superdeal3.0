@@ -95,15 +95,15 @@ def test_raw_telegram_message_is_preserved_exactly():
     )
     assert inserted is True
     row = db.execute(
-        "SELECT source_channel, source_message_id, raw_text, observed_at, ingested_at "
+        "SELECT source_channel, telegram_message_id, telegram_message_timestamp, ingested_at, original_message_text "
         "FROM telegram_raw_messages"
     ).fetchone()
     assert tuple(row) == (
         "@amazinglootsdealsoffers",
         "12345",
-        raw,
         "2026-10-03T06:49:04+00:00",
         "2026-10-03T06:49:05+00:00",
+        raw,
     )
     assert record_raw_telegram_message(
         db,
@@ -113,4 +113,4 @@ def test_raw_telegram_message_is_preserved_exactly():
         observed_at="later",
     ) is False
     assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1
-    assert db.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()[0] == raw
+    assert db.execute("SELECT original_message_text FROM telegram_raw_messages").fetchone()[0] == raw

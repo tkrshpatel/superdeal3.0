@@ -109,6 +109,31 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
             connection.execute(
                 f"ALTER TABLE telegram_raw_messages ADD COLUMN {name} {definition}"
             )
+
+    # Backfill duplicate metadata for raw messages that predate this schema.
+    legacy_rows = connection.execute(
+        "SELECT id, raw_text FROM telegram_raw_messages "
+        "WHERE content_hash IS NULL ORDER BY id"
+    ).fetchall()
+    for row in legacy_rows:
+        content_hash = hashlib.sha256(row["raw_text"].encode("utf-8")).hexdigest()
+        canonical = connection.execute(
+            """SELECT id FROM telegram_raw_messages
+               WHERE content_hash = ? AND raw_text = ? AND id < ?
+               ORDER BY id LIMIT 1""",
+            (content_hash, row["raw_text"], row["id"]),
+        ).fetchone()
+        connection.execute(
+            """UPDATE telegram_raw_messages
+               SET content_hash = ?, is_duplicate = ?, duplicate_of_id = ?
+               WHERE id = ?""",
+            (
+                content_hash,
+                1 if canonical else 0,
+                int(canonical["id"]) if canonical else None,
+                row["id"],
+            ),
+        )
     connection.commit()
     return connection
 

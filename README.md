@@ -99,7 +99,7 @@ Run the one-time user login:
 python -m superdeal.telegram_login
 \`\`\`
 
-Hybrid mode polls both readers, merges messages by configured channel/message ID, and keeps the Bot API path working even if the user reader has a temporary error.
+Hybrid mode keeps Bot API polling for bot-accessible channels and runs the authenticated Telethon reader as a live NewMessage event stream for user-accessible channels. Messages are passed directly into the existing parser and SQLite persistence pipeline. Telethon is configured to catch up on updates that arrived while the worker was offline.
 
 The worker logs three separate stages:
 - messages received by the Bot API reader

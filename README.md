@@ -76,3 +76,34 @@ One-time setup:
 The session file is local and ignored by Git. Do not share it.
 
 User mode accepts public t.me URLs, public usernames, and numeric IDs already known to the account. Invite-link tokens are not silently treated as public usernames.
+
+
+## Reliable Telegram ingestion
+
+For a mix of channels you administer and external/public deal channels, use **hybrid** mode. The Bot API path handles channels where the bot is a member, while the authenticated MTProto user reader handles public channels the bot cannot access.
+
+Recommended configuration:
+
+\`\`\`text
+TELEGRAM_READER_MODE=hybrid
+TELEGRAM_BOT_TOKEN=<existing bot token>
+TELEGRAM_API_ID=<Telegram API ID>
+TELEGRAM_API_HASH=<Telegram API hash>
+TELEGRAM_SESSION=data/telegram_user
+TELEGRAM_CHANNELS=-1004397807961,https://t.me/amazinglootsdealsoffers
+\`\`\`
+
+Run the one-time user login:
+
+\`\`\`powershell
+python -m superdeal.telegram_login
+\`\`\`
+
+Hybrid mode polls both readers, merges messages by configured channel/message ID, and keeps the Bot API path working even if the user reader has a temporary error.
+
+The worker logs three separate stages:
+- messages received by the Bot API reader
+- unique messages collected by the hybrid reader
+- deals actually persisted to SQLite
+
+This makes Telegram delivery, routing, and persistence failures visible instead of collapsing everything into "ingested 0".

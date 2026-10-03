@@ -9,6 +9,7 @@ description = "SuperDeal 3.0 deal discovery engine"
 requires-python = ">=3.11"
 dependencies = [
     "Telethon~=1.45.0",
+    "requests>=2.31,<3",
 ]
 
 [project.scripts]

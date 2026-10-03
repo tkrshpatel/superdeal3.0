@@ -190,3 +190,8 @@ def test_public_username_matching_remains_case_insensitive():
     ])
 
     assert len(client.fetch_messages("@DEAL_CHANNEL")) == 1
+
+
+def test_close_is_available_for_worker_lifecycle():
+    client, _ = make_client([])
+    assert client.close() is None

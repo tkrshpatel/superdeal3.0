@@ -1,16 +1,18 @@
 import json
 import threading
+from datetime import datetime, timezone
 from http.client import HTTPConnection
 from http.server import HTTPServer
 
 import pytest
 
-from superdeal.api import get_deal, list_deals, make_handler
+from superdeal.api import get_deal, list_deals, make_handler, record_click
 from superdeal.database import connect, upsert_deal
 
 
 def seed_db():
     db = connect(":memory:", check_same_thread=False)
+    now = datetime.now(timezone.utc).isoformat()
     upsert_deal(
         db, duplicate_hash="a", product_name="OnePlus Pad 2", deal_price=29699,
         merchant="Amazon", source_url="https://amazon.in/pad", raw_text="Pad",
@@ -33,6 +35,14 @@ def test_list_deals_filters_sort_and_limits():
     assert list_deals(db, sort="price_desc")[0]["product_name"] == "OnePlus Pad 2"
     assert len(list_deals(db, limit=1)) == 1
     assert get_deal(db, 999) is None
+
+
+def test_click_tracking_counts_and_returns_affiliate_url():
+    db = seed_db()
+    db.execute("UPDATE deals SET affiliate_url = ? WHERE id = 1", ("https://example.com/affiliate",))
+    db.commit()
+    assert record_click(db, 1) == "https://example.com/affiliate"
+    assert list_deals(db, sort="popular")[0]["click_count"] == 1
 
 
 def test_invalid_filters_raise():

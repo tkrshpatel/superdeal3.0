@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from .database import connect
 from .ingest import ingest_messages
-from .telegram import TelegramBotSource
-from .telegram_user import TelegramUserSource
+from .telegram import TelegramBotSource, TelegramMessage
+from .telegram_user import TelegramUserReaderError, TelegramUserSource
 
 LOGGER = logging.getLogger("superdeal.worker")
 
@@ -31,7 +32,11 @@ class WorkerConfig:
     @classmethod
     def from_env(cls) -> "WorkerConfig":
         token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-        channels = tuple(item.strip() for item in os.getenv("TELEGRAM_CHANNELS", "").split(",") if item.strip())
+        channels = tuple(
+            item.strip()
+            for item in os.getenv("TELEGRAM_CHANNELS", "").split(",")
+            if item.strip()
+        )
         database_url = os.getenv("DATABASE_URL", "data/superdeal.db")
         poll_interval = float(os.getenv("TELEGRAM_POLL_INTERVAL", "1"))
         batch_limit = int(os.getenv("TELEGRAM_BATCH_LIMIT", "100"))
@@ -39,7 +44,10 @@ class WorkerConfig:
         api_id = os.getenv("TELEGRAM_API_ID", "").strip()
         api_hash = os.getenv("TELEGRAM_API_HASH", "").strip()
         session = os.getenv("TELEGRAM_SESSION", "data/telegram_user").strip()
-        return cls(token, channels, database_url, poll_interval, batch_limit, reader_mode, api_id, api_hash, session)
+        return cls(
+            token, channels, database_url, poll_interval, batch_limit,
+            reader_mode, api_id, api_hash, session
+        )
 
     def validate(self) -> None:
         if self.reader_mode not in {"bot", "user", "hybrid"}:
@@ -70,9 +78,17 @@ def build_source(config: WorkerConfig):
     return TelegramBotSource(config.token)
 
 
-def _merge_messages(configured: tuple[str, ...], primary: dict[str, list], fallback: dict[str, list]) -> dict[str, list]:
+def _merge_messages(
+    configured: tuple[str, ...],
+    primary: dict[str, list],
+    fallback: dict[str, list],
+) -> dict[str, list]:
     merged = {channel: list(primary.get(channel, [])) for channel in configured}
-    seen = {(channel, message.message_id) for channel in configured for message in merged[channel]}
+    seen = {
+        (channel, message.message_id)
+        for channel in configured
+        for message in merged[channel]
+    }
     for channel in configured:
         for message in fallback.get(channel, []):
             key = (channel, message.message_id)
@@ -88,30 +104,91 @@ def run_once(config: WorkerConfig, *, source=None) -> int:
     try:
         if config.reader_mode == "hybrid":
             bot, user = source if source is not None else build_source(config)
-            primary = bot.fetch_messages_for_channels(config.channels, limit=config.batch_limit)
+            primary = bot.fetch_messages_for_channels(
+                config.channels, limit=config.batch_limit
+            )
             received_bot = sum(len(messages) for messages in primary.values())
-            LOGGER.info("Telegram bot reader received %d message(s) across %d configured channel(s)", received_bot, len(config.channels))
-
+            LOGGER.info(
+                "Telegram bot reader received %d message(s) across %d configured channel(s)",
+                received_bot,
+                len(config.channels),
+            )
             try:
-                fallback = user.fetch_messages_for_channels(config.channels, limit=config.batch_limit)
+                fallback = user.fetch_messages_for_channels(
+                    config.channels, limit=config.batch_limit
+                )
             except TelegramUserReaderError:
-                LOGGER.exception("Telegram user reader failed; bot messages will still be ingested")
+                LOGGER.exception(
+                    "Telegram user reader failed; bot messages will still be ingested"
+                )
                 fallback = {channel: [] for channel in config.channels}
-
-            messages_by_channel = _merge_messages(config.channels, primary, fallback)
+            messages_by_channel = _merge_messages(
+                config.channels, primary, fallback
+            )
             received = sum(len(messages) for messages in messages_by_channel.values())
-            LOGGER.info("Telegram hybrid reader collected %d unique message(s) across %d configured channel(s)", received, len(config.channels))
+            LOGGER.info(
+                "Telegram hybrid reader collected %d unique message(s) across %d configured channel(s)",
+                received,
+                len(config.channels),
+            )
         else:
             telegram = source or build_source(config)
-            messages_by_channel = telegram.fetch_messages_for_channels(config.channels, limit=config.batch_limit)
+            messages_by_channel = telegram.fetch_messages_for_channels(
+                config.channels, limit=config.batch_limit
+            )
             received = sum(len(messages) for messages in messages_by_channel.values())
-            LOGGER.info("Telegram %s reader received %d message(s) across %d configured channel(s)", config.reader_mode, received, len(config.channels))
+            LOGGER.info(
+                "Telegram %s reader received %d message(s) across %d configured channel(s)",
+                config.reader_mode,
+                received,
+                len(config.channels),
+            )
 
-        processed = sum(ingest_messages(connection, messages_by_channel.get(channel, [])) for channel in config.channels)
+        processed = sum(
+            ingest_messages(connection, messages_by_channel.get(channel, []))
+            for channel in config.channels
+        )
         LOGGER.info("Telegram poll ingested %d deal(s)", processed)
         return processed
     finally:
         connection.close()
+
+
+def _ingest_stream_message(
+    connection,
+    message: TelegramMessage,
+) -> None:
+    processed = ingest_messages(connection, [message])
+    LOGGER.info(
+        "Telegram stream persisted %d deal(s): channel=%s message_id=%s",
+        processed,
+        message.channel,
+        message.message_id,
+    )
+
+
+def _run_user_stream(config: WorkerConfig, source=None, stop_event=None) -> None:
+    telegram = source or TelegramUserSource(
+        config.api_id, config.api_hash, session=config.session
+    )
+    connection = connect(config.database_url, check_same_thread=False)
+    try:
+        LOGGER.info(
+            "Starting Telethon live stream for %d configured channel(s)",
+            len(config.channels),
+        )
+        telegram.run_forever(
+            config.channels,
+            lambda message: _ingest_stream_message(connection, message),
+        )
+    except Exception:
+        if not stop_event or not stop_event.is_set():
+            LOGGER.exception("Telegram user stream stopped unexpectedly")
+            raise
+    finally:
+        connection.close()
+        if source is None:
+            telegram.close()
 
 
 def _close_source(source) -> None:
@@ -126,8 +203,66 @@ def _close_source(source) -> None:
         close()
 
 
-def run_forever(config: WorkerConfig, *, source=None, sleep: Callable[[float], None] = time.sleep) -> None:
+def run_forever(
+    config: WorkerConfig,
+    *,
+    source=None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
     config.validate()
+
+    # User mode follows the proven Telethon event-stream pattern directly.
+    if config.reader_mode == "user":
+        _run_user_stream(config, source=source)
+        return
+
+    # Hybrid mode keeps Bot API polling for bot-accessible channels while a
+    # dedicated Telethon event loop handles channels the bot cannot access.
+    if config.reader_mode == "hybrid":
+        stop_event = threading.Event()
+        if source is None:
+            bot = TelegramBotSource(config.token)
+            user_source = None
+        else:
+            bot, user_source = source
+
+        user_holder: dict[str, TelegramUserSource] = {}
+
+        def user_runner() -> None:
+            local_source = user_source
+            if local_source is None:
+                local_source = TelegramUserSource(
+                    config.api_id, config.api_hash, session=config.session
+                )
+            user_holder["source"] = local_source
+            try:
+                _run_user_stream(config, source=local_source, stop_event=stop_event)
+            except Exception:
+                LOGGER.exception("Telegram user stream thread stopped")
+
+        thread = threading.Thread(
+            target=user_runner,
+            name="superdeal-telegram-user",
+            daemon=True,
+        )
+        thread.start()
+
+        bot_config = replace(config, reader_mode="bot")
+        try:
+            while True:
+                try:
+                    run_once(bot_config, source=bot)
+                except Exception:
+                    LOGGER.exception("Telegram bot polling cycle failed; retrying")
+                sleep(config.poll_interval)
+        finally:
+            stop_event.set()
+            user_to_close = user_holder.get("source") or user_source
+            if user_to_close:
+                user_to_close.close()
+            bot.close()
+        return
+
     telegram = source or build_source(config)
     try:
         while True:

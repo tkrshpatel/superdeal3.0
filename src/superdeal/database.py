@@ -66,6 +66,26 @@ CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel
     ON telegram_raw_messages(source_channel, source_message_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_content_hash
     ON telegram_raw_messages(content_hash);
+CREATE TABLE IF NOT EXISTS earnkaro_conversions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_raw_message_id INTEGER NOT NULL UNIQUE
+        REFERENCES telegram_raw_messages(id) ON DELETE CASCADE,
+    source_channel TEXT NOT NULL,
+    source_message_id TEXT NOT NULL,
+    request_text TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_reference TEXT,
+    response_text TEXT,
+    response_payload TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_earnkaro_conversions_status
+    ON earnkaro_conversions(status);
+
 CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 

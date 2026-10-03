@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS source_observations (
     UNIQUE(source_channel, source_message_id)
 );
 
+CREATE TABLE IF NOT EXISTS telegram_raw_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_channel TEXT NOT NULL,
+    source_message_id TEXT NOT NULL,
+    raw_text TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    ingested_at TEXT NOT NULL,
+    UNIQUE(source_channel, source_message_id)
+);
+
 CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
@@ -48,6 +58,7 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
 CREATE INDEX IF NOT EXISTS idx_observations_deal ON source_observations(deal_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_raw_messages_channel ON telegram_raw_messages(source_channel, source_message_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
 """
 
@@ -77,6 +88,36 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
             connection.execute(f"ALTER TABLE deals ADD COLUMN {name} {definition}")
     connection.commit()
     return connection
+
+
+def record_raw_telegram_message(
+    connection: sqlite3.Connection,
+    *,
+    source_channel: str,
+    source_message_id: str,
+    raw_text: str,
+    observed_at: str,
+    ingested_at: str | None = None,
+) -> bool:
+    """Persist the original Telegram message before parsing.
+
+    The raw ledger is the source of truth for Telegram ingestion. It is
+    committed independently so a later parser/enrichment failure cannot lose
+    the original message.
+    """
+    if not source_channel or not source_message_id:
+        raise ValueError("source_channel and source_message_id are required")
+    if not isinstance(raw_text, str):
+        raise TypeError("raw_text must be a string")
+    timestamp = ingested_at or observed_at
+    cursor = connection.execute(
+        """INSERT OR IGNORE INTO telegram_raw_messages
+           (source_channel, source_message_id, raw_text, observed_at, ingested_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (source_channel, source_message_id, raw_text, observed_at, timestamp),
+    )
+    connection.commit()
+    return cursor.rowcount == 1
 
 
 def upsert_deal(

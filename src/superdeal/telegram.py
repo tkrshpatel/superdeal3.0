@@ -195,6 +195,16 @@ class TelegramBotSource:
     def fetch_messages(self, channel: str, *, limit: int = 100) -> list[TelegramMessage]:
         return self.fetch_messages_for_channels((channel,), limit=limit).get(channel, [])
 
+
+    def close(self) -> None:
+        """Close the Bot API source.
+
+        Bot API polling uses stateless HTTP requests, so there is no persistent
+        client connection to close. The method exists so bot and user readers
+        can share the same worker lifecycle contract.
+        """
+        return None
+
     def _call(self, method: str, params: dict) -> list | dict:
         cleaned = {key: value for key, value in params.items() if value is not None}
         payload = self._request(method, cleaned)

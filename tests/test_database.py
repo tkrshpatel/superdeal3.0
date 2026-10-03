@@ -114,3 +114,25 @@ def test_raw_telegram_message_is_preserved_exactly():
     ) is False
     assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1
     assert db.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()[0] == raw
+
+def test_exact_duplicate_message_is_retained_and_tagged():
+    db = connect(":memory:")
+    raw = "Same deal message exactly\nhttps://example.com/p"
+    assert record_raw_telegram_message(
+        db, source_channel="@one", source_message_id="1", raw_text=raw,
+        observed_at="2026-10-03T07:00:00+00:00",
+        ingested_at="2026-10-03T07:00:01+00:00",
+    ) is True
+    assert record_raw_telegram_message(
+        db, source_channel="@two", source_message_id="2", raw_text=raw,
+        observed_at="2026-10-03T07:01:00+00:00",
+        ingested_at="2026-10-03T07:01:01+00:00",
+    ) is True
+    rows = db.execute(
+        """SELECT source_channel, source_message_id, raw_text,
+                  is_duplicate, duplicate_of_id
+           FROM telegram_raw_messages ORDER BY id"""
+    ).fetchall()
+    assert rows[0]["is_duplicate"] == 0
+    assert rows[1]["is_duplicate"] == 1
+    assert rows[1]["duplicate_of_id"] == rows[0]["id"]

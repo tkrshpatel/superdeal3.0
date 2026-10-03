@@ -111,5 +111,6 @@ def test_raw_telegram_message_is_preserved_exactly():
         source_message_id="12345",
         raw_text="changed",
         observed_at="later",
-    ) is True
-    assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 2
+    ) is False
+    assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1
+    assert db.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()[0] == raw

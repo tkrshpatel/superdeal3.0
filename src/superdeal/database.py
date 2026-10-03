@@ -86,7 +86,15 @@ CREATE TABLE IF NOT EXISTS earnkaro_conversions (
 CREATE INDEX IF NOT EXISTS idx_earnkaro_conversions_status
     ON earnkaro_conversions(status);
 
-CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);\n\nCREATE TABLE IF NOT EXISTS deal_clicks (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,\n    clicked_at TEXT NOT NULL\n);\n\nCREATE INDEX IF NOT EXISTS idx_deal_clicks_deal_time ON deal_clicks(deal_id, clicked_at);
+CREATE INDEX IF NOT EXISTS idx_price_history_deal ON price_history(deal_id);
+
+CREATE TABLE IF NOT EXISTS deal_clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    clicked_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deal_clicks_deal_time ON deal_clicks(deal_id, clicked_at);
 """
 
 def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread: bool = True) -> sqlite3.Connection:

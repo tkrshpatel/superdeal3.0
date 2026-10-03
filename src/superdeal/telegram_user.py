@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -74,7 +74,7 @@ class TelegramUserSource:
             self.api_id,
             self.api_hash,
             receive_updates=True,
-            catch_up=True,
+            catch_up=False,
             sequential_updates=True,
         )
         if not self.client.is_connected():
@@ -216,6 +216,43 @@ class TelegramUserSource:
 
         event_filter = events.NewMessage(chats=entities)
         self.client.add_event_handler(handler, event_filter)
+
+        # Recover only the last 15 minutes; do not replay the full offline backlog.
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+        seen_catchup: set[tuple[int, int]] = set()
+
+        for entity in entities:
+            async def catch_up_channel(entity=entity) -> None:
+                async for message in self.client.iter_messages(entity, limit=None):
+                    message_date = getattr(message, "date", None)
+                    if message_date is None:
+                        continue
+                    if message_date.tzinfo is None:
+                        message_date = message_date.replace(tzinfo=timezone.utc)
+                    if message_date.astimezone(timezone.utc) < cutoff:
+                        break
+
+                    message_id = int(getattr(message, "id", 0) or 0)
+                    key = (int(getattr(entity, "id", 0) or 0), message_id)
+                    if key in seen_catchup:
+                        continue
+                    seen_catchup.add(key)
+
+                    converted = self.message_from_event(
+                        message,
+                        canonical_by_id.get(int(getattr(entity, "id", 0) or 0)),
+                    )
+                    if converted:
+                        try:
+                            on_message(converted)
+                        except Exception:
+                            import logging
+                            logging.getLogger("superdeal.telegram_user").exception(
+                                "Telegram catch-up handler failed"
+                            )
+
+            self.client.loop.run_until_complete(catch_up_channel())
+
         try:
             self.client.run_until_disconnected()
         finally:

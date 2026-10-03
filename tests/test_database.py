@@ -1,4 +1,4 @@
-from superdeal.database import connect, get_deal, upsert_deal
+from superdeal.database import connect, get_deal, record_raw_telegram_message, upsert_deal
 
 
 def test_schema_and_first_insert():
@@ -80,3 +80,37 @@ def test_web_metadata_is_persisted():
     assert deal["image_url"] == "https://amazon.in/i.jpg"
     assert deal["verified_price"] == 999
     assert deal["last_verified_at"] == "2026-09-30T01:00:00Z"
+
+
+def test_raw_telegram_message_is_preserved_exactly():
+    db = connect(":memory:")
+    raw = "Myntra Loot : Upto 89% Off On Roadster Clothing.\n\nMens \nJeans : https://myntr.it/qmu9Js5"
+    inserted = record_raw_telegram_message(
+        db,
+        source_channel="@amazinglootsdealsoffers",
+        source_message_id="12345",
+        raw_text=raw,
+        observed_at="2026-10-03T06:49:04+00:00",
+        ingested_at="2026-10-03T06:49:05+00:00",
+    )
+    assert inserted is True
+    row = db.execute(
+        "SELECT source_channel, source_message_id, raw_text, observed_at, ingested_at "
+        "FROM telegram_raw_messages"
+    ).fetchone()
+    assert tuple(row) == (
+        "@amazinglootsdealsoffers",
+        "12345",
+        raw,
+        "2026-10-03T06:49:04+00:00",
+        "2026-10-03T06:49:05+00:00",
+    )
+    assert record_raw_telegram_message(
+        db,
+        source_channel="@amazinglootsdealsoffers",
+        source_message_id="12345",
+        raw_text="changed",
+        observed_at="later",
+    ) is False
+    assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1
+    assert db.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()[0] == raw

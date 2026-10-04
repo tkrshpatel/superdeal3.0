@@ -148,7 +148,7 @@ def test_token_and_limits_are_validated():
         client.fetch_updates(limit=101)
 
 
-def test_channel_name_matching_is_case_and_whitespace_insensitive():
+def test_channel_title_is_not_used_as_username_match():
     client, _ = make_client([
         {
             "ok": True,
@@ -158,17 +158,37 @@ def test_channel_name_matching_is_case_and_whitespace_insensitive():
                     "channel_post": {
                         "message_id": 31,
                         "date": 1790000000,
-                        "chat": {"id": -1004397807961, "title": "  Super   Deals 3.0  "},
-                        "text": "Name matching @ 5999",
+                        "chat": {"id": -1004397807961, "title": "Super Deals 3.0", "username": "real_channel"},
+                        "text": "Title must not match @ 5999",
                     },
                 }
             ],
         }
     ])
 
-    messages = client.fetch_messages(" super deals 3.0 ")
-    assert len(messages) == 1
-    assert messages[0].message_id == "31"
+    assert client.fetch_messages("super deals 3.0") == []
+
+
+def test_channel_username_matching_is_exact_not_similar():
+    client, _ = make_client([
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 31,
+                    "channel_post": {
+                        "message_id": 32,
+                        "date": 1790000000,
+                        "chat": {"id": -1004397807961, "title": "Deals", "username": "deals_official"},
+                        "text": "Exact username @ 5999",
+                    },
+                }
+            ],
+        }
+    ])
+
+    assert client.fetch_messages("@deals_official")
+    assert client.fetch_messages("@deals_officia") == []
 
 
 def test_public_username_matching_remains_case_insensitive():

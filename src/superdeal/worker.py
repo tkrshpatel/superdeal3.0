@@ -239,6 +239,7 @@ def run_forever(
             bot, user_source = source
 
         user_holder: dict[str, TelegramUserSource] = {}
+        user_failed = threading.Event()
 
         def user_runner() -> None:
             local_source = user_source
@@ -250,7 +251,10 @@ def run_forever(
             try:
                 _run_user_stream(config, source=local_source, stop_event=stop_event)
             except Exception:
-                LOGGER.exception("Telegram user stream thread stopped")
+                LOGGER.exception(
+                    "Telegram user stream stopped; no channels are being monitored by the user reader"
+                )
+                user_failed.set()
 
         thread = threading.Thread(
             target=user_runner,
@@ -260,8 +264,14 @@ def run_forever(
         thread.start()
 
         bot_config = replace(config, reader_mode="bot")
+        # This derived config is scoped only to the Bot API polling call.
+        # The runner's configured mode remains hybrid for its entire lifetime.
         try:
             while True:
+                if user_failed.is_set():
+                    raise TelegramUserReaderError(
+                        "No Telegram channels are being monitored by the user reader; exiting hybrid runner"
+                    )
                 try:
                     run_once(bot_config, source=bot)
                 except Exception:

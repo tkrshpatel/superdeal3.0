@@ -125,3 +125,30 @@ def test_user_stream_registers_channel_event_handler():
         lambda message: None,
     )
     assert len(client.handlers) == 0
+
+
+def test_user_stream_skips_unresolvable_channel_and_keeps_good_channels():
+    class PartiallyBrokenClient(FakeClient):
+        def get_entity(self, target):
+            if target == "broken":
+                raise ValueError("not found")
+            assert target == "amazinglootsdealsoffers"
+            return FakeEntity()
+
+    client = PartiallyBrokenClient()
+    source = TelegramUserSource("12345", "hash", client=client)
+    source.run_forever(
+        ("@broken", "@amazinglootsdealsoffers"),
+        lambda message: None,
+    )
+    assert len(client.handlers) == 0
+
+
+def test_user_stream_fails_only_when_no_channels_can_be_resolved():
+    class BrokenClient(FakeClient):
+        def get_entity(self, target):
+            raise ValueError("not found")
+
+    source = TelegramUserSource("12345", "hash", client=BrokenClient())
+    with pytest.raises(TelegramUserReaderError, match="No Telegram channels are being monitored"):
+        source.run_forever(("@broken-one", "@broken-two"), lambda message: None)

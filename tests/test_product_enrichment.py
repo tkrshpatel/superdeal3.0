@@ -22,6 +22,7 @@ def test_enrichment_is_additive_and_preserves_earnkaro_canonical_fields():
             title="Merchant page title", description="Product description",
             brand="BrandCo", canonical_url="https://merchant.example/p/1",
             image_url="https://merchant.example/image.jpg", price=1099, mrp=1999,
+            merchant="Amazon", discount_pct=45,
         )
 
     assert enrich_pending_deals(db, fetcher=fake_fetch) == 1
@@ -35,4 +36,8 @@ def test_enrichment_is_additive_and_preserves_earnkaro_canonical_fields():
     assert row["brand"] == "BrandCo"
     assert row["mrp"] == 1999
     assert row["verified_price"] == 1099
+    assert row["enriched_merchant"] == "Amazon"
+    assert row["page_discount_pct"] == 45
+    assert row["merchant"] == "Amazon"
+    assert row["current_price"] == 999
     assert row["enrichment_status"] == "enriched"

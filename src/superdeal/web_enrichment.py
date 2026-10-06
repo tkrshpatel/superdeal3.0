@@ -19,6 +19,8 @@ class WebMetadata:
     image_url: str | None = None
     price: int | None = None
     mrp: int | None = None
+    merchant: str | None = None
+    discount_pct: int | None = None
 
 
 class _MetadataParser(HTMLParser):

@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS deals (
     description TEXT,
     brand TEXT,
     mrp INTEGER,
+    enriched_merchant TEXT,
+    page_discount_pct INTEGER,
     enrichment_status TEXT NOT NULL DEFAULT 'pending',
     enrichment_error TEXT,
     raw_text TEXT NOT NULL,
@@ -125,6 +127,8 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
         "description": "TEXT",
         "brand": "TEXT",
         "mrp": "INTEGER",
+        "enriched_merchant": "TEXT",
+        "page_discount_pct": "INTEGER",
         "enrichment_status": "TEXT NOT NULL DEFAULT 'pending'",
         "enrichment_error": "TEXT",
     }

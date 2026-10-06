@@ -25,9 +25,12 @@ def enrich_pending_deals(connection, *, limit: int = 10, fetcher=fetch_product_m
                    image_url=COALESCE(?,image_url), verified_price=COALESCE(?,verified_price),
                    last_verified_at=?, description=COALESCE(?,description),
                    brand=COALESCE(?,brand), mrp=COALESCE(?,mrp),
+                   enriched_merchant=COALESCE(?,enriched_merchant),
+                   page_discount_pct=COALESCE(?,page_discount_pct),
                    enrichment_status='enriched', enrichment_error=NULL WHERE id=?""",
                 (metadata.title, metadata.canonical_url, metadata.image_url, metadata.price,
-                 now, metadata.description, metadata.brand, metadata.mrp, row["id"])
+                 now, metadata.description, metadata.brand, metadata.mrp,
+                 metadata.merchant, metadata.discount_pct, row["id"])
             )
             connection.commit()
         except Exception as exc:

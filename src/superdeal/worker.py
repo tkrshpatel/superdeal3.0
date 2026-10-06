@@ -12,6 +12,7 @@ from typing import Callable
 from .database import connect
 from .earnkaro import process_pending_earnkaro, queue_unique_telegram_messages
 from .ingest import ingest_messages
+from .product_enrichment import enrich_pending_deals
 from .telegram import TelegramBotSource, TelegramMessage
 from .telegram_user import TelegramUserReaderError, TelegramUserSource
 
@@ -151,11 +152,13 @@ def run_once(config: WorkerConfig, *, source=None) -> int:
         )
         queued = queue_unique_telegram_messages(connection, limit=config.batch_limit)
         converted = process_pending_earnkaro(connection, limit=config.batch_limit)
+        enriched = enrich_pending_deals(connection, limit=min(config.batch_limit, 10))
         LOGGER.info(
-            "Telegram poll ingested %d deal(s); queued %d EarnKaro job(s); processed %d EarnKaro job(s)",
+            "Telegram poll ingested %d raw message(s); queued %d EarnKaro job(s); processed %d EarnKaro job(s); enriched %d deal(s)",
             processed,
             queued,
             converted,
+            enriched,
         )
         return processed
     finally:

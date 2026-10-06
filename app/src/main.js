@@ -98,7 +98,7 @@ const merchantFromUrl = value => {
   } catch {}
   return '';
 };
-const displayMerchant = d => d.merchant || merchantFromUrl(d.canonical_url) || 'SuperDeal find';
+const displayMerchant = d => d.enriched_merchant || d.merchant || merchantFromUrl(d.canonical_url) || 'SuperDeal find';
 const displayTitle = d => {
   const title = String(d.page_title || '').trim();
   if (!title) return d.product_name;
@@ -132,7 +132,7 @@ function card(d) {
       <img src="${esc(d.image_url || 'https://placehold.co/500x420?text=SuperDeal')}" alt="${esc(title)}" loading="lazy">
       <div class="card-top">
         ${hot ? '<span class="hot-badge">🔥 HOT</span>' : ''}
-        ${d.discount_pct ? `<span class="discount-badge">${esc(d.discount_pct)}% OFF</span>` : ''}
+        ${(d.page_discount_pct || d.discount_pct) ? `<span class="discount-badge">${esc(d.page_discount_pct || d.discount_pct)}% OFF</span>` : ''}
       </div>
       <button class="save ${saved?'saved':''}" data-save="${esc(d.id)}" aria-label="${saved?'Remove from saved':'Save deal'}">${saved?'♥':'♡'}</button>
     </div>
@@ -232,7 +232,7 @@ function showDetail(id) {
       <div class="detail-price">${money(d.current_price)}</div>
       <div class="insights">
         ${Number(d.click_count||0) >= 5 ? '<span>🔥 High demand</span>' : ''}
-        ${d.discount_pct ? `<span>${esc(d.discount_pct)}% off</span>` : ''}
+        ${(d.page_discount_pct || d.discount_pct) ? `<span>${esc(d.page_discount_pct || d.discount_pct)}% off</span>` : ''}
         ${d.verified_price ? '<span>✓ Price verified</span>' : ''}
         <span>⌁ ${Number(d.click_count||0).toLocaleString('en-IN')} clicks</span>
       </div>

@@ -167,13 +167,9 @@ def _ingest_stream_message(
     message: TelegramMessage,
 ) -> None:
     processed = ingest_messages(connection, [message])
-    queued = queue_unique_telegram_messages(connection, limit=1)
-    converted = process_pending_earnkaro(connection, limit=1)
     LOGGER.info(
-        "Telegram stream persisted %d deal(s); queued %d EarnKaro job(s); processed %d EarnKaro job(s): channel=%s message_id=%s",
+        "Telegram stream persisted %d raw message(s): channel=%s message_id=%s",
         processed,
-        queued,
-        converted,
         message.channel,
         message.message_id,
     )

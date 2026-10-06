@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS deals (
     image_url TEXT,
     verified_price INTEGER,
     last_verified_at TEXT,
+    description TEXT,
+    brand TEXT,
+    mrp INTEGER,
+    enrichment_status TEXT NOT NULL DEFAULT 'pending',
+    enrichment_error TEXT,
     raw_text TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     first_seen_at TEXT NOT NULL,
@@ -117,6 +122,11 @@ def connect(database_url: str | Path = "data/superdeal.db", *, check_same_thread
         "image_url": "TEXT",
         "verified_price": "INTEGER",
         "last_verified_at": "TEXT",
+        "description": "TEXT",
+        "brand": "TEXT",
+        "mrp": "INTEGER",
+        "enrichment_status": "TEXT NOT NULL DEFAULT 'pending'",
+        "enrichment_error": "TEXT",
     }
     for name, definition in migrations.items():
         if name not in columns:

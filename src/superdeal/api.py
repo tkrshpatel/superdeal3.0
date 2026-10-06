@@ -126,7 +126,7 @@ def record_click(connection: sqlite3.Connection, deal_id: int) -> str | None:
         return None
     if row["last_seen_at"] < _cutoff():
         return None
-    target = row["affiliate_url"] or row["source_url"]
+    target = row["affiliate_url"]
     if not target:
         return None
     connection.execute(

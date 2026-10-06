@@ -13,6 +13,7 @@ from .database import connect
 from .earnkaro import process_pending_earnkaro, queue_unique_telegram_messages
 from .ingest import ingest_messages
 from .llm_enrichment import enrich_pending_deals_with_llm
+from .llm_enrichment import enrich_pending_deals_with_llm
 from .product_enrichment import enrich_pending_deals
 from .telegram import TelegramBotSource, TelegramMessage
 from .telegram_user import TelegramUserReaderError, TelegramUserSource

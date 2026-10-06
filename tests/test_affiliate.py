@@ -13,7 +13,7 @@ def test_invalid_url_rejected():
 
 
 def test_affiliate_url_requires_explicit_provider_output():
-    assert build_affiliate_url("https://AMAZON.IN/p/123") == "https://amazon.in/p/123"
+    assert build_affiliate_url("https://AMAZON.IN/p/123") is None
     assert build_affiliate_url(
         "https://amazon.in/p/123",
         "https://example.com/track?url=https%3A%2F%2Famazon.in%2Fp%2F123",

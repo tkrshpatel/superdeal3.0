@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -237,8 +237,9 @@ class TelegramUserSource:
         event_filter = events.NewMessage(chats=entities)
         self.client.add_event_handler(handler, event_filter)
 
-        # Recover only the last 15 minutes; do not replay the full offline backlog.
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+        # Reconcile full channel history before relying on live events. Raw persistence
+        # is idempotent on (source_channel, source_message_id), so replay safely fills
+        # any gaps left by outages, reconnects, or missed Telegram events.
         seen_catchup: set[tuple[int, int]] = set()
 
         async def process_catchup_message(entity: Any, message: Any) -> None:
@@ -247,9 +248,6 @@ class TelegramUserSource:
                 return
             if message_date.tzinfo is None:
                 message_date = message_date.replace(tzinfo=timezone.utc)
-            if message_date.astimezone(timezone.utc) < cutoff:
-                return
-
             message_id = int(getattr(message, "id", 0) or 0)
             key = (int(getattr(entity, "id", 0) or 0), message_id)
             if key in seen_catchup:

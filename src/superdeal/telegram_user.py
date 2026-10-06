@@ -252,26 +252,29 @@ class TelegramUserSource:
                     limit=None,
                     offset_date=event_date,
                 )
+                qualifying: list[Any] = []
+
+                def is_in_window(candidate: Any) -> bool:
+                    candidate_date = getattr(candidate, "date", None)
+                    if candidate_date is None:
+                        return False
+                    if candidate_date.tzinfo is None:
+                        candidate_date = candidate_date.replace(tzinfo=timezone.utc)
+                    return candidate_date.astimezone(timezone.utc) >= cutoff
+
                 if hasattr(recent, "__aiter__"):
                     async for candidate in recent:
-                        candidate_date = getattr(candidate, "date", None)
-                        if candidate_date is None:
-                            continue
-                        if candidate_date.tzinfo is None:
-                            candidate_date = candidate_date.replace(tzinfo=timezone.utc)
-                        if candidate_date.astimezone(timezone.utc) < cutoff:
+                        if not is_in_window(candidate):
                             break
-                        await persist_message(candidate, canonical)
+                        qualifying.append(candidate)
                 else:
                     for candidate in recent:
-                        candidate_date = getattr(candidate, "date", None)
-                        if candidate_date is None:
-                            continue
-                        if candidate_date.tzinfo is None:
-                            candidate_date = candidate_date.replace(tzinfo=timezone.utc)
-                        if candidate_date.astimezone(timezone.utc) < cutoff:
+                        if not is_in_window(candidate):
                             break
-                        await persist_message(candidate, canonical)
+                        qualifying.append(candidate)
+
+                for candidate in reversed(qualifying):
+                    await persist_message(candidate, canonical)
 
             # offset_date returns messages before the triggering event, so persist
             # the live event itself after reconciling the preceding 15 minutes.

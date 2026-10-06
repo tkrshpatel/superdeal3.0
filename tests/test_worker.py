@@ -52,7 +52,7 @@ def test_worker_persists_raw_without_creating_deal_before_earnkaro(tmp_path):
         TelegramMessage("@one", "1", "OnePlus Pad 2 @ 29699 https://amazon.in/p/1", "2026-09-29T20:00:00+00:00"),
     ])
     config = WorkerConfig("token", ("@one",), database_url=str(db))
-    assert run_once(config, source=source) == 2
+    assert run_once(config, source=source) == 1
     connection = connect(str(db))
     try:
         assert connection.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1

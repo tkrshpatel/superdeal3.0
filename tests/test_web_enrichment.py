@@ -22,3 +22,22 @@ def test_parse_product_metadata():
 def test_missing_metadata_is_safe():
     result = parse_html_metadata("<html><body>Nothing useful</body></html>", source_url="https://example.com")
     assert result == result.__class__()
+
+
+def test_parse_json_ld_product_metadata():
+    html = """
+    <html><head>
+    <script type="application/ld+json">
+    {"@type":"Product","name":"Noise Buds X","description":"Wireless earbuds",
+     "brand":{"@type":"Brand","name":"Noise"},"image":["/buds.jpg"],
+     "offers":{"@type":"Offer","price":"1299","highPrice":"2999"}}
+    </script>
+    </head></html>
+    """
+    result = parse_html_metadata(html, source_url="https://shop.example/p/1")
+    assert result.title == "Noise Buds X"
+    assert result.description == "Wireless earbuds"
+    assert result.brand == "Noise"
+    assert result.image_url == "https://shop.example/buds.jpg"
+    assert result.price == 1299
+    assert result.mrp == 2999

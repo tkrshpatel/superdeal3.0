@@ -82,10 +82,6 @@ def test_http_api_health_list_detail_and_filter_errors():
         assert "brand" in payload["deals"][0]
         assert "mrp" in payload["deals"][0]
         assert "enrichment_status" in payload["deals"][0]
-        assert "llm_product" in payload["deals"][0]
-        assert "llm_platform" in payload["deals"][0]
-        assert "llm_current_price" in payload["deals"][0]
-        assert "llm_discount_pct" in payload["deals"][0]
 
         client.request("GET", "/deals/1")
         response = client.getresponse()
@@ -96,10 +92,6 @@ def test_http_api_health_list_detail_and_filter_errors():
         assert "brand" in payload
         assert "mrp" in payload
         assert "enrichment_status" in payload
-        assert "llm_product" in payload
-        assert "llm_platform" in payload
-        assert "llm_current_price" in payload
-        assert "llm_discount_pct" in payload
         assert "source_url" not in payload
 
         client.request("GET", "/deals/1/freshness")

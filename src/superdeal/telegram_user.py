@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .telegram import TelegramMessage
+
+LOGGER = logging.getLogger("superdeal.telegram_user")
 
 PUBLIC_URL_RE = re.compile(
     r"^https?://(?:t\.me|telegram\.me)/(?:s/)?([^/?#]+)", re.I
@@ -191,11 +194,28 @@ class TelegramUserSource:
         except ImportError as exc:
             raise TelegramUserReaderError("Telethon is not installed") from exc
 
-        entities = [self._resolve_entity(channel) for channel in configured]
+        resolved: list[tuple[Any, str]] = []
+        for channel in configured:
+            try:
+                entity = self._resolve_entity(channel)
+            except TelegramUserReaderError:
+                LOGGER.exception(
+                    "Skipping unavailable Telegram channel in user stream: %s",
+                    channel,
+                )
+                continue
+            resolved.append((entity, channel))
+
+        entities = [entity for entity, _ in resolved]
         canonical_by_id = {
             int(getattr(entity, "id", 0)): self._canonical_channel(entity, channel)
-            for entity, channel in zip(entities, configured)
+            for entity, channel in resolved
         }
+
+        if not entities:
+            raise TelegramUserReaderError(
+                "Could not resolve any configured Telegram channels"
+            )
 
         async def handler(event: Any) -> None:
             converted = self.message_from_event(

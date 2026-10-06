@@ -150,5 +150,5 @@ def test_user_stream_fails_only_when_no_channels_can_be_resolved():
             raise ValueError("not found")
 
     source = TelegramUserSource("12345", "hash", client=BrokenClient())
-    with pytest.raises(TelegramUserReaderError, match="any configured"):
+    with pytest.raises(TelegramUserReaderError, match="No Telegram channels are being monitored"):
         source.run_forever(("@broken-one", "@broken-two"), lambda message: None)

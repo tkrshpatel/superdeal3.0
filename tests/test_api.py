@@ -77,12 +77,14 @@ def test_http_api_health_list_detail_and_filter_errors():
         payload = json.loads(response.read())
         assert response.status == 200
         assert payload["deals"][0]["product_name"] == "OnePlus Pad 2"
+        assert "source_url" not in payload["deals"][0]
 
         client.request("GET", "/deals/1")
         response = client.getresponse()
         payload = json.loads(response.read())
         assert response.status == 200
         assert payload["merchant"] == "Amazon"
+        assert "source_url" not in payload
 
         client.request("GET", "/deals/1/freshness")
         response = client.getresponse()

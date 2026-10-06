@@ -3,10 +3,10 @@
 from __future__ import annotations
 import logging
 from datetime import datetime, timezone
-from .web_enrichment import fetch_web_metadata
+from .browser_enrichment import fetch_product_metadata
 LOGGER = logging.getLogger("superdeal.product_enrichment")
 
-def enrich_pending_deals(connection, *, limit: int = 10, fetcher=fetch_web_metadata) -> int:
+def enrich_pending_deals(connection, *, limit: int = 10, fetcher=fetch_product_metadata) -> int:
     """Enrich deals without changing EarnKaro canonical text or affiliate URL."""
     rows = connection.execute(
         """SELECT id, affiliate_url FROM deals

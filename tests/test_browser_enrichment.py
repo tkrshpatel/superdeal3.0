@@ -44,3 +44,9 @@ def test_incomplete_browser_metadata_is_supplemented_by_http(monkeypatch):
     assert result.price == 999
     assert result.mrp == 1999
     assert result.image_url == "https://fallback.example/image.jpg"
+
+
+def test_merchant_resolution_supports_known_and_generic_domains():
+    assert browser_enrichment._merchant("www.myntra.com") == "Myntra"
+    assert browser_enrichment._merchant("ajio.com") == "AJIO"
+    assert browser_enrichment._merchant("shop.example-store.com") == "Example Store"

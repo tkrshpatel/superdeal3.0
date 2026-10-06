@@ -2,7 +2,7 @@ import pytest
 
 from superdeal.database import connect
 from superdeal.telegram import MockTelegramSource, TelegramMessage
-from superdeal.worker import WorkerConfig, run_once
+from superdeal.worker import WorkerConfig, _ingest_stream_message, run_once
 
 
 def test_config_from_environment(monkeypatch):
@@ -88,3 +88,30 @@ def test_exact_duplicate_telegram_messages_are_stored_but_only_one_is_queued():
     ])
     config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:")
     assert run_once(config, source=source) == 2
+
+
+def test_stream_burst_persists_every_message_before_conversion(tmp_path):
+    db = tmp_path / "burst.db"
+    connection = connect(str(db), check_same_thread=False)
+    try:
+        messages = [
+            TelegramMessage("@one", "101", "Deal one https://example.com/1", "2026-10-06T07:00:00+00:00"),
+            TelegramMessage("@one", "102", "Deal two https://example.com/2", "2026-10-06T07:00:00+00:00"),
+            TelegramMessage("@one", "103", "Deal three https://example.com/3", "2026-10-06T07:00:00+00:00"),
+        ]
+        for message in messages:
+            _ingest_stream_message(connection, message)
+
+        rows = connection.execute(
+            "SELECT source_message_id, raw_text FROM telegram_raw_messages ORDER BY id"
+        ).fetchall()
+        assert [(row["source_message_id"], row["raw_text"]) for row in rows] == [
+            ("101", "Deal one https://example.com/1"),
+            ("102", "Deal two https://example.com/2"),
+            ("103", "Deal three https://example.com/3"),
+        ]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM earnkaro_conversions"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()

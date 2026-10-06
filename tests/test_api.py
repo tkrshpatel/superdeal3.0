@@ -15,12 +15,12 @@ def seed_db():
     now = datetime.now(timezone.utc).isoformat()
     upsert_deal(
         db, duplicate_hash="a", product_name="OnePlus Pad 2", deal_price=29699,
-        merchant="Amazon", source_url="https://amazon.in/pad", raw_text="Pad",
+        merchant="Amazon", source_url="https://amazon.in/pad", affiliate_url="https://earnkaro.example/pad", raw_text="Pad",
         observed_at=now,
     )
     upsert_deal(
         db, duplicate_hash="b", product_name="Wonderchef Cooktop", deal_price=3499,
-        merchant="Flipkart", source_url="https://flipkart.com/cook", raw_text="Cooktop",
+        merchant="Flipkart", source_url="https://flipkart.com/cook", affiliate_url="https://earnkaro.example/cook", raw_text="Cooktop",
         observed_at=now,
     )
     return db
@@ -47,6 +47,8 @@ def test_click_tracking_counts_and_returns_affiliate_url():
 
 def test_click_does_not_fall_back_to_raw_source_url():
     db = seed_db()
+    db.execute("UPDATE deals SET affiliate_url = NULL WHERE id = 1")
+    db.commit()
     assert record_click(db, 1) is None
 
 

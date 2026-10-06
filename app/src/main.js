@@ -110,7 +110,9 @@ const displayTitle = d => {
       : [];
   return suffixes.reduce((value, pattern) => value.replace(pattern, '').trim(), title) || d.product_name;
 };
-const displayPrice = d => d.current_price ?? d.llm_current_price;\nconst displayDiscount = d => d.llm_discount_pct ?? d.page_discount_pct ?? d.discount_pct;\nconst esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const displayPrice = d => d.current_price ?? d.llm_current_price;
+const displayDiscount = d => d.llm_discount_pct ?? d.page_discount_pct ?? d.discount_pct;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const age = value => {
   const ms = Date.now() - Date.parse(value);
   if (!Number.isFinite(ms) || ms < 0) return 'Just now';

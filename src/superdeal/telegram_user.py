@@ -214,7 +214,7 @@ class TelegramUserSource:
 
         if not entities:
             raise TelegramUserReaderError(
-                "Could not resolve any configured Telegram channels"
+                "No Telegram channels are being monitored: none of the configured channels could be resolved"
             )
 
         async def handler(event: Any) -> None:

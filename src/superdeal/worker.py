@@ -260,6 +260,8 @@ def run_forever(
         thread.start()
 
         bot_config = replace(config, reader_mode="bot")
+        # This derived config is scoped only to the Bot API polling call.
+        # The runner's configured mode remains hybrid for its entire lifetime.
         try:
             while True:
                 try:

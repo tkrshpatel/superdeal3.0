@@ -117,6 +117,19 @@ def test_message_from_event_preserves_channel_and_timestamp():
     assert message.observed_at == "2026-10-02T12:00:00+00:00"
 
 
+def test_user_stream_catches_up_messages_older_than_fifteen_minutes():
+    client = FakeClient()
+    source = TelegramUserSource("12345", "hash", client=client)
+    received = []
+
+    source.run_forever(
+        ("@amazinglootsdealsoffers",),
+        received.append,
+    )
+
+    assert [message.message_id for message in received] == ["12", "11"]
+
+
 def test_user_stream_registers_channel_event_handler():
     client = FakeClient()
     source = TelegramUserSource("12345", "hash", client=client)

@@ -41,3 +41,23 @@ def test_parse_json_ld_product_metadata():
     assert result.image_url == "https://shop.example/buds.jpg"
     assert result.price == 1299
     assert result.mrp == 2999
+
+
+def test_parse_image_metadata_fallbacks():
+    twitter = parse_html_metadata(
+        '<meta name="twitter:image" content="https://cdn.example/twitter.jpg">',
+        source_url="https://shop.example/p/1",
+    )
+    assert twitter.image_url == "https://cdn.example/twitter.jpg"
+
+    itemprop = parse_html_metadata(
+        '<meta itemprop="image" content="/images/schema.jpg">',
+        source_url="https://shop.example/p/1",
+    )
+    assert itemprop.image_url == "https://shop.example/images/schema.jpg"
+
+    og_url = parse_html_metadata(
+        '<meta property="og:image:url" content="//cdn.example/og.jpg">',
+        source_url="https://shop.example/p/1",
+    )
+    assert og_url.image_url == "https://cdn.example/og.jpg"

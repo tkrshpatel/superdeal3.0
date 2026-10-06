@@ -41,7 +41,7 @@ class _MetadataParser(HTMLParser):
             self._in_json_ld = True
             self._json_ld_parts = []
         if tag == "meta":
-            key = (values.get("property") or values.get("name") or "").lower()
+            key = (values.get("property") or values.get("name") or values.get("itemprop") or "").lower()
             content = values.get("content")
             if key and content:
                 self.metadata[key] = content.strip()
@@ -124,7 +124,14 @@ def parse_html_metadata(html: str, *, source_url: str) -> WebMetadata:
         or parser.metadata.get("og:description")
         or parser.metadata.get("description")
     )
-    image = _image(product.get("image"), source_url) or _image(parser.metadata.get("og:image"), source_url)
+    image = (
+        _image(product.get("image"), source_url)
+        or _image(parser.metadata.get("og:image"), source_url)
+        or _image(parser.metadata.get("og:image:url"), source_url)
+        or _image(parser.metadata.get("twitter:image"), source_url)
+        or _image(parser.metadata.get("twitter:image:src"), source_url)
+        or _image(parser.metadata.get("image"), source_url)
+    )
     price = _price(
         offers.get("price")
         or offers.get("lowPrice")
@@ -152,8 +159,14 @@ def fetch_web_metadata(url: str, *, timeout: float = 8.0) -> WebMetadata:
     request = Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; SuperDeal/1.0; product metadata)",
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/140.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-IN,en;q=0.9",
+            "Cache-Control": "no-cache",
         },
     )
     with urlopen(request, timeout=timeout) as response:

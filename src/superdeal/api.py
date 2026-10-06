@@ -79,7 +79,6 @@ def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant
         f"""SELECT d.id, d.product_name, d.merchant, d.current_price, d.affiliate_url,
                    d.page_title, d.canonical_url, d.image_url, d.verified_price, d.last_verified_at,
                   d.description, d.brand, d.mrp, d.enrichment_status,
-                   d.description, d.brand, d.mrp, d.enrichment_status,
                    d.raw_text, d.status, d.first_seen_at, d.last_seen_at,
                    COUNT(c.id) AS click_count
             FROM deals d
@@ -103,6 +102,7 @@ def get_deal(connection: sqlite3.Connection, deal_id: int) -> dict | None:
     row = connection.execute(
         """SELECT d.id, d.product_name, d.merchant, d.current_price, d.affiliate_url,
                   d.page_title, d.canonical_url, d.image_url, d.verified_price, d.last_verified_at,
+                  d.description, d.brand, d.mrp, d.enrichment_status,
                   d.raw_text, d.status, d.first_seen_at, d.last_seen_at,
                   COUNT(c.id) AS click_count
            FROM deals d

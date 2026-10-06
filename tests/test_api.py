@@ -88,6 +88,10 @@ def test_http_api_health_list_detail_and_filter_errors():
         payload = json.loads(response.read())
         assert response.status == 200
         assert payload["merchant"] == "Amazon"
+        assert "description" in payload
+        assert "brand" in payload
+        assert "mrp" in payload
+        assert "enrichment_status" in payload
         assert "source_url" not in payload
 
         client.request("GET", "/deals/1/freshness")

@@ -45,6 +45,11 @@ def test_click_tracking_counts_and_returns_affiliate_url():
     assert list_deals(db, sort="popular")[0]["click_count"] == 1
 
 
+def test_click_does_not_fall_back_to_raw_source_url():
+    db = seed_db()
+    assert record_click(db, 1) is None
+
+
 def test_invalid_filters_raise():
     db = seed_db()
     with pytest.raises(ValueError, match="sort"):

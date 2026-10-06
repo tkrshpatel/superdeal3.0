@@ -141,9 +141,24 @@ def fetch_product_metadata(url: str) -> WebMetadata:
     """Prefer rendered-browser enrichment, falling back to the existing HTTP logic."""
     try:
         metadata = fetch_browser_metadata(url)
-        if _useful(metadata):
+        if metadata.image_url and metadata.title and metadata.price:
             return metadata
-        LOGGER.info("Browser enrichment returned no useful product fields; using HTTP fallback")
+        try:
+            fallback = fetch_web_metadata(url)
+        except Exception as exc:
+            LOGGER.info("HTTP metadata supplement failed: %s", exc)
+            return metadata
+        return WebMetadata(
+            title=metadata.title or fallback.title,
+            description=metadata.description or fallback.description,
+            brand=metadata.brand or fallback.brand,
+            canonical_url=metadata.canonical_url or fallback.canonical_url,
+            image_url=metadata.image_url or fallback.image_url,
+            price=metadata.price or fallback.price,
+            mrp=metadata.mrp or fallback.mrp,
+            merchant=metadata.merchant or fallback.merchant,
+            discount_pct=metadata.discount_pct or fallback.discount_pct,
+        )
     except Exception as exc:
         LOGGER.warning("Browser enrichment failed; using HTTP fallback: %s", exc)
     return fetch_web_metadata(url)

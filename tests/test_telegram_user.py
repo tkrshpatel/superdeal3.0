@@ -11,10 +11,10 @@ from superdeal.telegram_user import (
 
 
 class FakeMessage:
-    def __init__(self, message_id, text):
+    def __init__(self, message_id, text, date=None):
         self.id = message_id
         self.raw_text = text
-        self.date = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+        self.date = date or datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
 
 
 class FakeEntity:
@@ -44,7 +44,7 @@ class FakeClient:
         assert target == "amazinglootsdealsoffers"
         return FakeEntity()
 
-    def iter_messages(self, entity, limit):
+    def iter_messages(self, entity, limit, **kwargs):
         return iter(
             [
                 FakeMessage(12, "newer deal @ 5999"),
@@ -115,6 +115,54 @@ def test_message_from_event_preserves_channel_and_timestamp():
     assert message.message_id == "44"
     assert message.text.startswith("Samsung SSD")
     assert message.observed_at == "2026-10-02T12:00:00+00:00"
+
+
+def test_user_stream_does_not_replay_history_on_startup():
+    client = FakeClient()
+    source = TelegramUserSource("12345", "hash", client=client)
+    received = []
+
+    source.run_forever(
+        ("@amazinglootsdealsoffers",),
+        received.append,
+    )
+
+    assert received == []
+
+
+def test_live_event_reconciles_only_previous_fifteen_minutes():
+    import asyncio
+
+    current = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc)
+
+    class LiveClient(FakeClient):
+        def iter_messages(self, entity, limit, **kwargs):
+            assert kwargs["offset_date"] == current
+            return iter([
+                FakeMessage(102, "missed recent deal", datetime(2026, 10, 6, 11, 55, tzinfo=timezone.utc)),
+                FakeMessage(101, "too old deal", datetime(2026, 10, 6, 11, 44, tzinfo=timezone.utc)),
+            ])
+
+        def run_until_disconnected(self):
+            callback, _ = self.handlers[0]
+
+            class Event:
+                chat_id = 123
+                chat = FakeEntity()
+                message = FakeMessage(103, "current deal", current)
+
+            asyncio.run(callback(Event()))
+
+    client = LiveClient()
+    source = TelegramUserSource("12345", "hash", client=client)
+    received = []
+
+    source.run_forever(
+        ("@amazinglootsdealsoffers",),
+        received.append,
+    )
+
+    assert [message.message_id for message in received] == ["102", "103"]
 
 
 def test_user_stream_registers_channel_event_handler():

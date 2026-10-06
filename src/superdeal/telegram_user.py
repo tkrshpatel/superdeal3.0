@@ -217,11 +217,8 @@ class TelegramUserSource:
                 "No Telegram channels are being monitored: none of the configured channels could be resolved"
             )
 
-        async def handler(event: Any) -> None:
-            converted = self.message_from_event(
-                event,
-                canonical_by_id.get(int(getattr(event, "chat_id", 0) or 0)),
-            )
+        async def persist_message(message: Any, canonical: str | None) -> None:
+            converted = self.message_from_event(message, canonical)
             if converted is None:
                 return
             try:
@@ -229,63 +226,62 @@ class TelegramUserSource:
             except Exception:
                 # Keep the Telegram event loop alive; the caller's logging
                 # wrapper is responsible for surfacing persistence failures.
-                import logging
-                logging.getLogger("superdeal.telegram_user").exception(
-                    "Telegram user message handler failed"
+                LOGGER.exception("Telegram user message handler failed")
+
+        async def handler(event: Any) -> None:
+            chat_id = int(getattr(event, "chat_id", 0) or 0)
+            canonical = canonical_by_id.get(chat_id)
+            message = getattr(event, "message", event)
+            event_date = getattr(message, "date", None) or datetime.now(timezone.utc)
+            if event_date.tzinfo is None:
+                event_date = event_date.replace(tzinfo=timezone.utc)
+            event_date = event_date.astimezone(timezone.utc)
+            cutoff = event_date - timedelta(minutes=15)
+
+            entity = next(
+                (
+                    candidate
+                    for candidate in entities
+                    if int(getattr(candidate, "id", 0) or 0) == chat_id
+                ),
+                None,
+            )
+            if entity is not None:
+                recent = self.client.iter_messages(
+                    entity,
+                    limit=None,
+                    offset_date=event_date,
                 )
+                qualifying: list[Any] = []
+
+                def is_in_window(candidate: Any) -> bool:
+                    candidate_date = getattr(candidate, "date", None)
+                    if candidate_date is None:
+                        return False
+                    if candidate_date.tzinfo is None:
+                        candidate_date = candidate_date.replace(tzinfo=timezone.utc)
+                    return candidate_date.astimezone(timezone.utc) >= cutoff
+
+                if hasattr(recent, "__aiter__"):
+                    async for candidate in recent:
+                        if not is_in_window(candidate):
+                            break
+                        qualifying.append(candidate)
+                else:
+                    for candidate in recent:
+                        if not is_in_window(candidate):
+                            break
+                        qualifying.append(candidate)
+
+                for candidate in reversed(qualifying):
+                    await persist_message(candidate, canonical)
+
+            # offset_date returns messages before the triggering event, so persist
+            # the live event itself after reconciling the preceding 15 minutes.
+            await persist_message(event, canonical)
 
         event_filter = events.NewMessage(chats=entities)
         self.client.add_event_handler(handler, event_filter)
-
-        # Recover only the last 15 minutes; do not replay the full offline backlog.
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
-        seen_catchup: set[tuple[int, int]] = set()
-
-        async def process_catchup_message(entity: Any, message: Any) -> None:
-            message_date = getattr(message, "date", None)
-            if message_date is None:
-                return
-            if message_date.tzinfo is None:
-                message_date = message_date.replace(tzinfo=timezone.utc)
-            if message_date.astimezone(timezone.utc) < cutoff:
-                return
-
-            message_id = int(getattr(message, "id", 0) or 0)
-            key = (int(getattr(entity, "id", 0) or 0), message_id)
-            if key in seen_catchup:
-                return
-            seen_catchup.add(key)
-
-            converted = self.message_from_event(
-                message,
-                canonical_by_id.get(int(getattr(entity, "id", 0) or 0)),
-            )
-            if converted:
-                try:
-                    on_message(converted)
-                except Exception:
-                    import logging
-                    logging.getLogger("superdeal.telegram_user").exception(
-                        "Telegram catch-up handler failed"
-                    )
-
-        async def catch_up_channel(entity: Any) -> None:
-            messages = self.client.iter_messages(entity, limit=None)
-            if hasattr(messages, "__aiter__"):
-                async for message in messages:
-                    await process_catchup_message(entity, message)
-            else:
-                for message in messages:
-                    await process_catchup_message(entity, message)
-
-        import asyncio
-
-        for entity in entities:
-            loop = getattr(self.client, "loop", None)
-            if loop is not None:
-                loop.run_until_complete(catch_up_channel(entity))
-            else:
-                asyncio.run(catch_up_channel(entity))
 
         try:
             self.client.run_until_disconnected()

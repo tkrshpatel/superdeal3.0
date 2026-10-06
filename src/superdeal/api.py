@@ -76,7 +76,7 @@ def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant
         raise ValueError("sort must be one of: newest, price_asc, price_desc, popular")
 
     rows = connection.execute(
-        f"""SELECT d.id, d.product_name, d.merchant, d.current_price, d.source_url, d.affiliate_url,
+        f"""SELECT d.id, d.product_name, d.merchant, d.current_price, d.affiliate_url,
                    d.page_title, d.canonical_url, d.image_url, d.verified_price, d.last_verified_at,
                    d.raw_text, d.status, d.first_seen_at, d.last_seen_at,
                    COUNT(c.id) AS click_count
@@ -99,7 +99,7 @@ def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant
 
 def get_deal(connection: sqlite3.Connection, deal_id: int) -> dict | None:
     row = connection.execute(
-        """SELECT d.id, d.product_name, d.merchant, d.current_price, d.source_url, d.affiliate_url,
+        """SELECT d.id, d.product_name, d.merchant, d.current_price, d.affiliate_url,
                   d.page_title, d.canonical_url, d.image_url, d.verified_price, d.last_verified_at,
                   d.raw_text, d.status, d.first_seen_at, d.last_seen_at,
                   COUNT(c.id) AS click_count
@@ -119,7 +119,7 @@ def get_deal(connection: sqlite3.Connection, deal_id: int) -> dict | None:
 
 def record_click(connection: sqlite3.Connection, deal_id: int) -> str | None:
     row = connection.execute(
-        "SELECT affiliate_url, source_url, status, last_seen_at FROM deals WHERE id = ?",
+        "SELECT affiliate_url, status, last_seen_at FROM deals WHERE id = ?",
         (deal_id,),
     ).fetchone()
     if not row or row["status"] != "active":

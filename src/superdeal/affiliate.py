@@ -27,10 +27,10 @@ def normalize_source_url(url: str | None) -> str | None:
 
 
 def build_affiliate_url(source_url: str | None, affiliate_url: str | None = None) -> str | None:
-    """Return an explicitly supplied affiliate URL, otherwise the source URL."""
-    if affiliate_url:
-        return normalize_source_url(affiliate_url)
-    return normalize_source_url(source_url)
+    """Return only an explicitly supplied provider-generated affiliate URL."""
+    if not affiliate_url:
+        return None
+    return normalize_source_url(affiliate_url)
 
 
 class AffiliateProvider(Protocol):

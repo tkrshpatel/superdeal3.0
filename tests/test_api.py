@@ -78,6 +78,10 @@ def test_http_api_health_list_detail_and_filter_errors():
         assert response.status == 200
         assert payload["deals"][0]["product_name"] == "OnePlus Pad 2"
         assert "source_url" not in payload["deals"][0]
+        assert "description" in payload["deals"][0]
+        assert "brand" in payload["deals"][0]
+        assert "mrp" in payload["deals"][0]
+        assert "enrichment_status" in payload["deals"][0]
 
         client.request("GET", "/deals/1")
         response = client.getresponse()

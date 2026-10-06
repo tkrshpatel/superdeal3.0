@@ -90,3 +90,46 @@ def test_earnkaro_response_is_persisted(monkeypatch):
         assert row["attempts"] == 1
     finally:
         connection.close()
+
+
+def test_successful_earnkaro_response_is_the_only_deal_source(monkeypatch):
+    class Response:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "data": "EARNKARO PRODUCT Deal @ 499 https://amzn.to/converted",
+                "request_id": "ek-canonical",
+            }
+
+    monkeypatch.setattr(
+        "superdeal.earnkaro.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+
+    connection = connect(":memory:")
+    try:
+        original = "TELEGRAM ORIGINAL Deal @ 9999 https://example.com/original"
+        record_raw_telegram_message(
+            connection,
+            source_channel="@one",
+            source_message_id="99",
+            raw_text=original,
+            observed_at="2026-10-03T07:00:00+00:00",
+        )
+        assert queue_unique_telegram_messages(connection) == 1
+        assert connection.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 0
+
+        assert process_pending_earnkaro(connection, api_key="secret") == 1
+
+        deal = connection.execute("SELECT * FROM deals").fetchone()
+        assert deal["raw_text"] == "EARNKARO PRODUCT Deal @ 499 https://amzn.to/converted"
+        assert deal["product_name"] == "EARNKARO PRODUCT"
+        assert deal["current_price"] == 499
+        assert original not in deal["raw_text"]
+
+        raw = connection.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()
+        assert raw["raw_text"] == original
+    finally:
+        connection.close()

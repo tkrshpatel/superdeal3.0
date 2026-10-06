@@ -1,6 +1,6 @@
 import pytest
 
-from superdeal.database import connect, get_deal
+from superdeal.database import connect
 from superdeal.telegram import MockTelegramSource, TelegramMessage
 from superdeal.worker import WorkerConfig, run_once
 
@@ -46,7 +46,7 @@ def test_run_once_ingests_all_configured_channels():
     assert run_once(config, source=source) == 2
 
 
-def test_worker_can_persist_to_sqlite(tmp_path):
+def test_worker_persists_raw_without_creating_deal_before_earnkaro(tmp_path):
     db = tmp_path / "superdeal.db"
     source = MockTelegramSource([
         TelegramMessage("@one", "1", "OnePlus Pad 2 @ 29699 https://amazon.in/p/1", "2026-09-29T20:00:00+00:00"),
@@ -55,7 +55,8 @@ def test_worker_can_persist_to_sqlite(tmp_path):
     assert run_once(config, source=source) == 1
     connection = connect(str(db))
     try:
-        assert get_deal(connection, 1)["current_price"] == 29699
+        assert connection.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 0
     finally:
         connection.close()
 
@@ -80,10 +81,10 @@ def test_hybrid_run_once_merges_bot_and_user_messages():
     config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:", reader_mode="hybrid", api_id="1", api_hash="hash")
     assert run_once(config, source=(bot, user)) == 2
 
-def test_exact_duplicate_telegram_messages_are_not_processed_twice():
+def test_exact_duplicate_telegram_messages_are_stored_but_only_one_is_queued():
     source = MockTelegramSource([
         TelegramMessage("@one", "1", "Same deal @ 100 https://example.com/p", "2026-10-03T07:00:00+00:00"),
         TelegramMessage("@two", "2", "Same deal @ 100 https://example.com/p", "2026-10-03T07:01:00+00:00"),
     ])
     config = WorkerConfig("token", ("@one", "@two"), database_url=":memory:")
-    assert run_once(config, source=source) == 1
+    assert run_once(config, source=source) == 2

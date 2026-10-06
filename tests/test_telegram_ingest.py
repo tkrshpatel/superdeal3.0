@@ -12,25 +12,33 @@ def test_mock_source_filters_channel_and_limit():
     assert [m.message_id for m in source.fetch_messages("deals_a", limit=1)] == ["1"]
 
 
-def test_ingest_parses_and_persists_message():
+def test_ingest_persists_raw_message_without_creating_deal():
     db = connect(":memory:")
-    message = TelegramMessage("deals_a", "42", "BOLTT EVO Deal @ 8999 https://fkrt.to/a", "2026-09-30T00:00:00Z")
+    message = TelegramMessage(
+        "deals_a", "42",
+        "ORIGINAL TELEGRAM Deal @ 8999 https://fkrt.to/a",
+        "2026-09-30T00:00:00Z",
+    )
     assert ingest_messages(db, [message]) == 1
-    row = db.execute("SELECT * FROM deals").fetchone()
-    assert row["product_name"] == "BOLTT EVO"
-    assert row["current_price"] == 8999
-    assert row["merchant"] == "Flipkart"
-    observation = db.execute("SELECT * FROM source_observations").fetchone()
-    assert observation["source_channel"] == "deals_a"
-    assert observation["source_message_id"] == "42"
+
+    raw = db.execute("SELECT * FROM telegram_raw_messages").fetchone()
+    assert raw["raw_text"] == message.text
+    assert raw["source_channel"] == "deals_a"
+    assert raw["source_message_id"] == "42"
+    assert db.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM source_observations").fetchone()[0] == 0
 
 
-def test_duplicate_messages_from_multiple_channels_share_canonical_deal():
+def test_duplicate_raw_messages_are_retained_but_not_parsed_into_deals():
     db = connect(":memory:")
     messages = [
-        TelegramMessage("deals_a", "1", "BOLTT EVO Deal @ 8999 https://fkrt.to/a", "2026-09-30T00:00:00Z"),
-        TelegramMessage("deals_b", "9", "BOLTT EVO Deal @ 8999 https://fkrt.to/b", "2026-09-30T00:01:00Z"),
+        TelegramMessage("deals_a", "1", "Same Telegram payload", "2026-09-30T00:00:00Z"),
+        TelegramMessage("deals_b", "9", "Same Telegram payload", "2026-09-30T00:01:00Z"),
     ]
     assert ingest_messages(db, messages) == 2
-    assert db.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 1
-    assert db.execute("SELECT COUNT(*) FROM source_observations").fetchone()[0] == 2
+    assert db.execute("SELECT COUNT(*) FROM telegram_raw_messages").fetchone()[0] == 2
+    assert db.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 0
+    duplicate = db.execute(
+        "SELECT is_duplicate FROM telegram_raw_messages WHERE source_channel = 'deals_b'"
+    ).fetchone()
+    assert duplicate["is_duplicate"] == 1

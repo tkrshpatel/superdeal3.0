@@ -98,7 +98,7 @@ const merchantFromUrl = value => {
   } catch {}
   return '';
 };
-const displayMerchant = d => d.enriched_merchant || d.merchant || merchantFromUrl(d.canonical_url) || 'SuperDeal find';
+const displayMerchant = d => d.llm_platform || d.enriched_merchant || d.merchant || merchantFromUrl(d.canonical_url) || 'SuperDeal find';
 const displayTitle = d => {
   const title = String(d.page_title || '').trim();
   if (!title) return d.product_name;
@@ -110,6 +110,8 @@ const displayTitle = d => {
       : [];
   return suffixes.reduce((value, pattern) => value.replace(pattern, '').trim(), title) || d.product_name;
 };
+const displayPrice = d => d.current_price ?? d.llm_current_price;
+const displayDiscount = d => d.llm_discount_pct ?? d.page_discount_pct ?? d.discount_pct;
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const age = value => {
   const ms = Date.now() - Date.parse(value);
@@ -132,14 +134,14 @@ function card(d) {
       <img src="${esc(d.image_url || 'https://placehold.co/500x420?text=SuperDeal')}" alt="${esc(title)}" loading="lazy">
       <div class="card-top">
         ${hot ? '<span class="hot-badge">🔥 HOT</span>' : ''}
-        ${(d.page_discount_pct || d.discount_pct) ? `<span class="discount-badge">${esc(d.page_discount_pct || d.discount_pct)}% OFF</span>` : ''}
+        ${displayDiscount(d) ? `<span class="discount-badge">${escdisplayDiscount(d)}% OFF</span>` : ''}
       </div>
       <button class="save ${saved?'saved':''}" data-save="${esc(d.id)}" aria-label="${saved?'Remove from saved':'Save deal'}">${saved?'♥':'♡'}</button>
     </div>
     <div class="card-content">
       <div class="merchant">${esc(merchant)}</div>
       <h3>${esc(title)}</h3>
-      <div class="price-row"><strong>${money(d.current_price)}</strong>${d.verified_price ? '<span class="verified">✓ Verified</span>' : ''}</div>
+      <div class="price-row"><strong>${money(displayPrice(d))}</strong>${d.verified_price ? '<span class="verified">✓ Verified</span>' : ''}</div>
       <div class="demand-row">
         <span class="${hot?'demand hot':'demand'}">⌁ ${Number(d.click_count||0).toLocaleString('en-IN')} ${Number(d.click_count||0)===1?'person':'people'} clicked</span>
         <span>${age(d.last_seen_at)}</span>
@@ -165,9 +167,9 @@ function render(list) {
 function localFilter(list) {
   const q = state.query.toLowerCase();
   let result = list.filter(d => !q || `${displayTitle(d)} ${displayMerchant(d)} ${d.product_name} ${d.raw_text||''}`.toLowerCase().includes(q));
-  if (state.active === 'drops') result = result.filter(d => Number(d.discount_pct||0) > 0);
-  if (state.active === 'under499') result = result.filter(d => d.current_price != null && Number(d.current_price) < 500);
-  if (state.active === 'discount') result = result.filter(d => Number(d.discount_pct||0) >= 50);
+  if (state.active === 'drops') result = result.filter(d => Number(displayDiscount(d)||0) > 0);
+  if (state.active === 'under499') result = result.filter(d => displayPrice(d) != null && Number(displayPrice(d)) < 500);
+  if (state.active === 'discount') result = result.filter(d => Number(displayDiscount(d)||0) >= 50);
   if (state.active === 'hot') result = result.filter(d => Number(d.click_count||0) >= 5);
   if (state.active === 'saved') result = result.filter(d => state.saved.has(String(d.id)));
   return result;
@@ -229,10 +231,10 @@ function showDetail(id) {
       <div class="detail-image"><img src="${esc(d.image_url || 'https://placehold.co/600x500?text=SuperDeal')}" alt="${esc(title)}"></div>
       <div class="eyebrow">${esc(merchant)}</div>
       <h2>${esc(title)}</h2>
-      <div class="detail-price">${money(d.current_price)}</div>
+      <div class="detail-price">${money(displayPrice(d))}</div>
       <div class="insights">
         ${Number(d.click_count||0) >= 5 ? '<span>🔥 High demand</span>' : ''}
-        ${(d.page_discount_pct || d.discount_pct) ? `<span>${esc(d.page_discount_pct || d.discount_pct)}% off</span>` : ''}
+        ${displayDiscount(d) ? `<span>${escdisplayDiscount(d)}% off</span>` : ''}
         ${d.verified_price ? '<span>✓ Price verified</span>' : ''}
         <span>⌁ ${Number(d.click_count||0).toLocaleString('en-IN')} clicks</span>
       </div>
@@ -265,7 +267,7 @@ dealsEl.addEventListener('click', e => {
   if (share) {
     e.stopPropagation();
     const d = state.deals.find(x => String(x.id) === String(share.dataset.share));
-    if (navigator.share) { const title = displayTitle(d); navigator.share({title, text:`${title} — ${money(d.current_price)}`, url:API('/go/'+d.id)}).catch(()=>{}); }
+    if (navigator.share) { const title = displayTitle(d); navigator.share({title, text:`${title} — ${money(displayPrice(d))}`, url:API('/go/'+d.id)}).catch(()=>{}); }
     else navigator.clipboard?.writeText(API('/go/'+d.id));
     return;
   }

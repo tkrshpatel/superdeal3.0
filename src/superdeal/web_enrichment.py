@@ -118,7 +118,7 @@ def parse_html_metadata(html: str, *, source_url: str) -> WebMetadata:
     if isinstance(brand_value, dict):
         brand_value = brand_value.get("name")
 
-    title = product.get("name") or parser.metadata.get("og:title") or " ".join(parser._title_parts).strip()
+    title = product.get("name") or " ".join(parser._title_parts).strip() or parser.metadata.get("og:title")
     description = (
         product.get("description")
         or parser.metadata.get("og:description")

@@ -50,7 +50,7 @@ def list_deals(connection: sqlite3.Connection, *, q: str | None = None, merchant
     if min_price is not None and max_price is not None and min_price > max_price:
         raise ValueError("min_price cannot exceed max_price")
     limit = max(1, min(limit, 100))
-    clauses = ["d.status = 'active'", "d.last_seen_at >= ?"]
+    clauses = ["d.status = 'active'", "d.affiliate_url IS NOT NULL", "d.affiliate_url != ''", "d.last_seen_at >= ?"]
     params: list[object] = [_cutoff()]
     if q:
         clauses.append("(LOWER(d.product_name) LIKE ? OR LOWER(COALESCE(d.merchant, '')) LIKE ? OR LOWER(d.raw_text) LIKE ?)")
@@ -105,7 +105,7 @@ def get_deal(connection: sqlite3.Connection, deal_id: int) -> dict | None:
                   COUNT(c.id) AS click_count
            FROM deals d
            LEFT JOIN deal_clicks c ON c.deal_id = d.id AND c.clicked_at >= ?
-           WHERE d.id = ? AND d.last_seen_at >= ?
+           WHERE d.id = ? AND d.affiliate_url IS NOT NULL AND d.affiliate_url != '' AND d.last_seen_at >= ?
            GROUP BY d.id""",
         (_cutoff(), deal_id, _cutoff()),
     ).fetchone()
@@ -126,7 +126,7 @@ def record_click(connection: sqlite3.Connection, deal_id: int) -> str | None:
         return None
     if row["last_seen_at"] < _cutoff():
         return None
-    target = row["affiliate_url"] or row["source_url"]
+    target = row["affiliate_url"]
     if not target:
         return None
     connection.execute(

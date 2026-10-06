@@ -197,6 +197,7 @@ def process_pending_earnkaro(
             deal_price=deal.deal_price,
             merchant=deal.merchant,
             source_url=deal.source_url,
+            affiliate_url=deal.source_url,
             raw_text=converted_text,
             observed_at=_now(),
             source_channel=row["source_channel"],

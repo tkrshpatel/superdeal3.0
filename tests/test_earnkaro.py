@@ -127,6 +127,7 @@ def test_successful_earnkaro_response_is_the_only_deal_source(monkeypatch):
         assert deal["raw_text"] == "EARNKARO PRODUCT Deal @ 499 https://amzn.to/converted"
         assert deal["product_name"] == "EARNKARO PRODUCT"
         assert deal["current_price"] == 499
+        assert deal["affiliate_url"] == "https://amzn.to/converted"
         assert original not in deal["raw_text"]
 
         raw = connection.execute("SELECT raw_text FROM telegram_raw_messages").fetchone()

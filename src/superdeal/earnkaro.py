@@ -10,7 +10,8 @@ from typing import Any
 
 import requests
 
-from .database import connect
+from .database import connect, upsert_deal
+from .parser import duplicate_hash, parse_deal
 
 LOGGER = logging.getLogger("superdeal.earnkaro")
 
@@ -179,9 +180,32 @@ def process_pending_earnkaro(
             ),
         )
         connection.commit()
+
+        # The successful EarnKaro response is the canonical source for every
+        # downstream deal field. Original Telegram raw_text is never parsed
+        # into deals or exposed to downstream consumers.
+        converted_text = result["response_text"]
+        deal = parse_deal(
+            converted_text,
+            source_channel=row["source_channel"],
+            source_message_id=row["source_message_id"],
+        )
+        upsert_deal(
+            connection,
+            duplicate_hash=duplicate_hash(deal),
+            product_name=deal.product_name,
+            deal_price=deal.deal_price,
+            merchant=deal.merchant,
+            source_url=deal.source_url,
+            raw_text=converted_text,
+            observed_at=_now(),
+            source_channel=row["source_channel"],
+            source_message_id=row["source_message_id"],
+        )
+
         processed += 1
         LOGGER.info(
-            "EarnKaro conversion completed: channel=%s message_id=%s",
+            "EarnKaro conversion completed and deal persisted: channel=%s message_id=%s",
             row["source_channel"], row["source_message_id"],
         )
 

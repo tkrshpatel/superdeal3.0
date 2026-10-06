@@ -53,12 +53,20 @@ def _discount(value: str | None) -> int | None:
 
 
 def _merchant(host: str) -> str | None:
-    host = host.lower()
-    if host == "amazon.in" or host.endswith(".amazon.in"):
-        return "Amazon"
-    if host == "flipkart.com" or host.endswith(".flipkart.com"):
-        return "Flipkart"
-    return None
+    host = host.lower().removeprefix("www.")
+    known = {
+        "amazon.in": "Amazon", "flipkart.com": "Flipkart", "myntra.com": "Myntra",
+        "ajio.com": "AJIO", "meesho.com": "Meesho", "tatacliq.com": "Tata CLiQ",
+        "nykaa.com": "Nykaa", "croma.com": "Croma", "reliancedigital.in": "Reliance Digital",
+    }
+    for domain, name in known.items():
+        if host == domain or host.endswith("." + domain):
+            return name
+    if not host:
+        return None
+    parts = host.split(".")
+    label = parts[-2] if len(parts) >= 2 else parts[0]
+    return label.replace("-", " ").title() or None
 
 
 def _useful(metadata: WebMetadata) -> bool:
@@ -92,21 +100,26 @@ def fetch_browser_metadata(url: str, *, timeout_ms: int = 15000) -> WebMetadata:
             metadata = parse_html_metadata(page.content(), source_url=page.url)
             host = urlparse(page.url).hostname or ""
             merchant = _merchant(host)
-            title = price = mrp = discount_pct = brand = image_url = None
+            title = _text(page, ("h1", "[itemprop='name']"))
+            price = _number(_text(page, ("[itemprop='price']", "[data-testid*='price']", "[class*='price']")))
+            mrp = _number(_text(page, ("[class*='mrp']", "[class*='original-price']", "[class*='list-price']")))
+            discount_pct = _discount(_text(page, ("[class*='discount']", "[class*='saving']")))
+            brand = _text(page, ("[itemprop='brand']", "[data-testid*='brand']", "[class*='brand']"))
+            image_url = _attr(page, ("[itemprop='image']", "main img"), "src")
             if merchant == "Amazon":
-                title = _text(page, ("#productTitle",))
-                price = _number(_text(page, (".a-price .a-offscreen", "#corePrice_feature_div .a-offscreen")))
-                mrp = _number(_text(page, (".basisPrice .a-offscreen", ".a-text-price .a-offscreen")))
-                discount_pct = _discount(_text(page, (".savingsPercentage",)))
-                brand = _text(page, ("#bylineInfo",))
-                image_url = _attr(page, ("#landingImage", "#imgBlkFront"), "data-old-hires") or _attr(page, ("#landingImage", "#imgBlkFront"), "src")
+                title = _text(page, ("#productTitle",)) or title
+                price = _number(_text(page, (".a-price .a-offscreen", "#corePrice_feature_div .a-offscreen"))) or price
+                mrp = _number(_text(page, (".basisPrice .a-offscreen", ".a-text-price .a-offscreen"))) or mrp
+                discount_pct = _discount(_text(page, (".savingsPercentage",))) or discount_pct
+                brand = _text(page, ("#bylineInfo",)) or brand
+                image_url = _attr(page, ("#landingImage", "#imgBlkFront"), "data-old-hires") or _attr(page, ("#landingImage", "#imgBlkFront"), "src") or image_url
             elif merchant == "Flipkart":
-                title = _text(page, ("h1 span", "h1"))
-                price = _number(_text(page, ("div.Nx9bqj", "div._30jeq3")))
-                mrp = _number(_text(page, ("div.yRaY8j", "div._3I9_wc")))
-                discount_pct = _discount(_text(page, ("div.UkUFwK", "div._3Ay6Sb")))
-                brand = _text(page, ("span.G6XhRU", "span.B_NuCI"))
-                image_url = _attr(page, ("img.DByuf4", "img._396cs4"), "src")
+                title = _text(page, ("h1 span", "h1")) or title
+                price = _number(_text(page, ("div.Nx9bqj", "div._30jeq3"))) or price
+                mrp = _number(_text(page, ("div.yRaY8j", "div._3I9_wc"))) or mrp
+                discount_pct = _discount(_text(page, ("div.UkUFwK", "div._3Ay6Sb"))) or discount_pct
+                brand = _text(page, ("span.G6XhRU", "span.B_NuCI")) or brand
+                image_url = _attr(page, ("img.DByuf4", "img._396cs4"), "src") or image_url
             if mrp and price and not discount_pct and mrp > price:
                 discount_pct = round((mrp - price) * 100 / mrp)
             metadata = WebMetadata(

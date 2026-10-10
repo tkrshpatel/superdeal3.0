@@ -72,7 +72,6 @@ def _chat_matches_config(chat: dict, configured: str) -> bool:
     normalized = _normalize_channel_config(value)
     chat_id = str(chat.get("id", "")).strip()
     username = str(chat.get("username", "")).strip().lstrip("@").lower()
-    title = " ".join(str(chat.get("title", "")).split()).lower()
 
     if not normalized:
         return False
@@ -81,13 +80,14 @@ def _chat_matches_config(chat: dict, configured: str) -> bool:
     if normalized.lstrip("-").isdigit():
         return normalized == chat_id
 
-    # Telegram public usernames are optional; private channels normally have
-    # no username, so a username configuration cannot match them.
+    # Public-channel configuration must match the actual Telegram username
+    # exactly. Never fall back to the chat title: two different channels can
+    # have the same/similar display title, which can route a message to the
+    # wrong configured source.
     if normalized.startswith("+"):
         return False
 
-    normalized_text = " ".join(normalized.split())
-    return normalized_text == username or normalized_text == title
+    return normalized == username
 
 
 class TelegramBotSource:
